@@ -1,0 +1,64 @@
+rules_version = '2';
+
+// サンダース配車費アプリ用の Firestore セキュリティルール
+// - roles/{uid} に役割（admin=管理者 / editor=担当者 / viewer=閲覧）がある人だけが読める
+// - 書き込めるのは管理者と担当者だけ
+// - ID の発行・権限の変更・削除は管理者だけ
+// - 最初の管理者は、初期設定画面から1回だけ作成できる（meta/bootstrap を作った時点で締め切り）
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function myRolePath() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
+    function bootstrapPath() { return /databases/$(database)/documents/meta/bootstrap; }
+    function hasRole() { return signedIn() && exists(myRolePath()); }
+    function myRole() { return get(myRolePath()).data.role; }
+    function isEditor() { return hasRole() && myRole() in ['admin', 'editor']; }
+    function isAdmin() { return hasRole() && myRole() == 'admin'; }
+    function validRole(r) { return r in ['admin', 'editor', 'viewer']; }
+
+    // 初期設定が済んでいるかどうか（中身は管理者のUIDだけ）
+    match /meta/bootstrap {
+      allow read: if true;
+      allow create: if signedIn()
+        && !exists(bootstrapPath())
+        && request.resource.data.adminUid == request.auth.uid
+        && getAfter(myRolePath()).data.role == 'admin';
+      allow update, delete: if false;
+    }
+
+    // 利用者ごとの役割
+    match /roles/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if (isAdmin() && validRole(request.resource.data.role))
+        || (signedIn() && uid == request.auth.uid
+            && request.resource.data.role == 'admin'
+            && !exists(bootstrapPath())
+            && existsAfter(bootstrapPath()));
+      allow update: if (isAdmin() && uid != request.auth.uid && validRole(request.resource.data.role))
+        || (signedIn() && uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChange'])
+            && request.resource.data.mustChange == false);
+      allow delete: if isAdmin() && uid != request.auth.uid;
+    }
+
+    // 名簿・行先・単価
+    match /master/{doc} {
+      allow read: if hasRole();
+      allow write: if isEditor();
+    }
+
+    // 試合（集金・支給の記録）
+    match /games/{id} {
+      allow read: if hasRole();
+      allow write: if isEditor();
+    }
+
+    // プール台帳
+    match /pool/{id} {
+      allow read: if hasRole();
+      allow write: if isEditor();
+    }
+  }
+}

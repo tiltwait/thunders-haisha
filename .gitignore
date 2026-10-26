@@ -1,0 +1,8 @@
+# 名簿など個人情報を含むファイルは絶対にコミットしない
+*名簿*
+*roster*
+*.csv
+*.xlsx
+*.pdf
+.DS_Store
+node_modules/

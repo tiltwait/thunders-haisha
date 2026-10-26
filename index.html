@@ -1,0 +1,1276 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#12203a">
+<meta name="apple-mobile-web-app-title" content="配車費">
+<title>サンダース配車費</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: phone-first single column. Sticky top bar, a dark scoreboard band for each game's money, fixed bottom tabs. */
+:root{
+  --bg:#f1f4f8;
+  --surface:#ffffff;
+  --surface-2:#e6ebf2;
+  --ink:#12203a;
+  --ink-2:#4b5b74;
+  --line:#d2dae5;
+  --accent:#1c4fa6;
+  --accent-ink:#ffffff;
+  --accent-soft:#e2eaf8;
+  --board:#12203a;
+  --board-ink:#f3f6fb;
+  --board-dim:#a3b4cf;
+  --board-hi:#ffd166;
+  --board-track:#2c3d5c;
+  --ok:#14774a;
+  --ok-bg:#dcf1e4;
+  --warn:#955200;
+  --warn-bg:#fbedd4;
+  --danger:#b3261e;
+  --danger-bg:#fbe5e3;
+  --scrim:rgba(10,16,28,.48);
+  --font-ui:"BIZ UDPGothic","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --font-num:"Barlow Condensed","Arial Narrow","BIZ UDPGothic",sans-serif;
+  --radius:10px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1420; --surface:#162133; --surface-2:#1f2c42; --ink:#e9eef6; --ink-2:#a3b3c9; --line:#2b3b54;
+    --accent:#88aeff; --accent-ink:#0b1424; --accent-soft:#1d2e4c;
+    --board:#1f3150; --board-ink:#f3f6fb; --board-dim:#aabcd9; --board-hi:#ffd166; --board-track:#34496e;
+    --ok:#64d49c; --ok-bg:#15382a; --warn:#f3b85e; --warn-bg:#3b2c13; --danger:#ff9088; --danger-bg:#3e1d1b;
+    --scrim:rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1420; --surface:#162133; --surface-2:#1f2c42; --ink:#e9eef6; --ink-2:#a3b3c9; --line:#2b3b54;
+  --accent:#88aeff; --accent-ink:#0b1424; --accent-soft:#1d2e4c;
+  --board:#1f3150; --board-ink:#f3f6fb; --board-dim:#aabcd9; --board-hi:#ffd166; --board-track:#34496e;
+  --ok:#64d49c; --ok-bg:#15382a; --warn:#f3b85e; --warn-bg:#3b2c13; --danger:#ff9088; --danger-bg:#3e1d1b;
+  --scrim:rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{margin:0;padding-top:env(safe-area-inset-top,0px);background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:15px;line-height:1.6;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+.wrap{width:100%;max-width:640px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:8;background:var(--bg);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;gap:10px;padding-block:10px}
+.brand{flex:1;min-width:0}
+.brand b{display:block;font-size:16px;letter-spacing:.02em;line-height:1.3}
+.brand small{display:block;color:var(--ink-2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{font-size:12px;padding:3px 9px;border-radius:999px;white-space:nowrap;background:var(--ok-bg);color:var(--ok)}
+.sync.busy{background:var(--accent-soft);color:var(--accent)}
+.sync.err{background:var(--warn-bg);color:var(--warn)}
+.sync.ro{background:var(--surface-2);color:var(--ink-2)}
+
+main.wrap{display:grid;gap:18px;padding-block:16px 128px}
+h1{font-size:20px;line-height:1.35;margin:0;text-wrap:balance}
+h2{font-size:13px;letter-spacing:.06em;color:var(--ink-2);margin:0;display:flex;align-items:baseline;gap:8px}
+h2 .count{font-family:var(--font-num);font-size:18px;color:var(--ink);letter-spacing:0}
+section{display:grid;gap:10px;min-width:0}
+p{margin:0}
+.hint{font-size:13px;color:var(--ink-2)}
+.empty{font-size:14px;color:var(--ink-2);background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);padding:18px 16px}
+
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+.tabs .wrap{display:grid;grid-template-columns:repeat(3,1fr)}
+.tabs button{min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--ink-2);background:none;border:0;cursor:pointer}
+.tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 18px;border-radius:var(--radius);border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:700;cursor:pointer;text-align:center}
+.btn.sec{background:var(--surface);color:var(--accent);border-color:var(--line)}
+.btn.danger{background:var(--surface);color:var(--danger);border-color:var(--danger)}
+.btn.small{min-height:40px;padding:0 12px;font-size:14px}
+.btn.block{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.btnrow .btn{flex:1 1 140px}
+
+.field{display:grid;gap:4px;min-width:0}
+.field label,.lbl{font-size:13px;color:var(--ink-2);font-weight:700}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-height:44px;width:100%;min-width:0}
+textarea{resize:vertical}
+input[type="checkbox"]{width:22px;height:22px;min-height:0;accent-color:var(--accent)}
+input[type="file"]{padding:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.err{color:var(--danger);font-size:14px;font-weight:700}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;display:grid;gap:14px;min-width:0}
+.card h3{font-size:16px;margin:0}
+.plainform{display:grid;gap:14px}
+.note{font-size:14px;border-radius:var(--radius);padding:12px 14px;background:var(--surface-2);color:var(--ink)}
+.note.warn{background:var(--warn-bg);color:var(--warn)}
+.note.accent{background:var(--accent-soft);color:var(--ink)}
+
+.pill{display:inline-block;font-size:12px;line-height:1.5;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap;font-weight:400}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.accent{background:var(--accent-soft);color:var(--accent)}
+
+.no{display:inline-grid;place-items:center;font-family:var(--font-num);font-weight:700;font-size:15px;min-width:2.1em;height:1.55em;padding:0 .3em;border:1.5px solid currentColor;border-radius:5px;line-height:1;font-variant-numeric:tabular-nums;flex:none}
+
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.stats div{background:var(--surface);padding:10px 14px;display:grid}
+.stats span{font-size:12px;color:var(--ink-2)}
+.stats b{font-family:var(--font-num);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.stats b.warn{color:var(--warn)}
+
+.list{display:grid;gap:8px}
+.gcard{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;cursor:pointer}
+.gdate{display:grid;gap:2px;justify-items:start}
+.gdate b{font-family:var(--font-num);font-size:20px;font-weight:600;line-height:1.1}
+.gmain{min-width:0;display:block}
+.gvenue,.gsub{display:block}
+.gvenue{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gsub{font-size:13px;color:var(--ink-2)}
+.gside{display:grid;justify-items:end;gap:4px}
+.price{font-family:var(--font-num);font-size:20px;font-weight:600}
+.price small{font-family:var(--font-ui);font-size:12px;margin-left:1px}
+
+.board{background:var(--board);color:var(--board-ink);border-radius:var(--radius);padding:14px 16px 16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.board .k{font-size:12px;color:var(--board-dim);letter-spacing:.06em}
+.board .v{font-family:var(--font-num);font-weight:600;font-size:32px;line-height:1.05;font-variant-numeric:tabular-nums}
+.board .v small{font-family:var(--font-ui);font-size:14px;font-weight:400;margin-left:2px}
+.board .s{font-size:12px;color:var(--board-dim)}
+.board .hi .v{color:var(--board-hi)}
+.board .wide{grid-column:1/-1}
+.board .v.big{font-size:48px}
+.meter{grid-column:1/-1;height:6px;background:var(--board-track);border-radius:3px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--board-hi);border-radius:3px}
+
+.gtitle{display:grid;gap:4px}
+.back{justify-self:start;background:none;border:0;color:var(--accent);padding:4px 0;cursor:pointer;font-size:14px}
+.gmeta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface-2);border-radius:var(--radius);padding:4px;gap:4px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 62px);z-index:5}
+.seg button{min-height:46px;border:0;border-radius:7px;background:transparent;font-size:14px;color:var(--ink-2);cursor:pointer;line-height:1.25}
+.seg button small{display:block;font-family:var(--font-num);font-size:15px}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+.row{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius);padding:12px 14px;min-height:66px;width:100%;text-align:left;cursor:pointer}
+div.row{cursor:default}
+.row.static{background:var(--surface-2);border-color:transparent}
+.row.on{background:var(--ok-bg);border-color:var(--ok)}
+.check{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;color:var(--surface)}
+.row.on .check{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.row.static .check{border-style:dashed}
+.who{display:grid;gap:4px;min-width:0}
+.who b{font-size:16px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mems{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px;color:var(--ink-2)}
+.mem{display:inline-flex;align-items:center;gap:4px}
+.mem.abs{text-decoration:line-through;opacity:.7}
+.mem em{font-style:normal;font-size:11px;color:var(--warn);text-decoration:none}
+.sub{font-size:12px;color:var(--ink-2)}
+.amt{font-family:var(--font-num);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.amt small{font-family:var(--font-ui);font-size:12px;font-weight:400;margin-left:1px}
+.calc{font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;font-variant-numeric:tabular-nums}
+.calc b{font-size:16px}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:14px;cursor:pointer}
+.chip small{font-size:11px;color:inherit;opacity:.8}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chip.abs[aria-pressed="true"]{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:14px;padding:4px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+
+.ledger{display:grid;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.lrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);min-height:52px}
+.lrow:first-child{border-top:0}
+.lrow .d{font-family:var(--font-num);font-size:16px;color:var(--ink-2);min-width:3.2em}
+.lrow .t{min-width:0}
+.lrow .t b{display:block;font-size:14px}
+.lrow .t span{display:block;font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow .a{font-family:var(--font-num);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lrow .a.plus{color:var(--ok)}
+.lrow .a.minus{color:var(--danger)}
+.x{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer;display:grid;place-items:center;font-size:18px;line-height:1}
+.lrow .sp{width:36px}
+.linkbtn{background:none;border:0;padding:0;text-align:left;cursor:pointer;width:100%}
+
+.hh{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.hh:first-of-type{border-top:0;padding-top:0}
+.mrow{display:grid;grid-template-columns:4.2em minmax(0,1fr) auto;gap:8px;align-items:center}
+.mrow .hhsel{grid-column:2/3}
+.tog{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);white-space:nowrap}
+.vrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5em auto;gap:8px;align-items:center}
+.brow{display:grid;grid-template-columns:minmax(0,1fr) 7em;gap:8px;align-items:center}
+.crow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.urow{display:grid;grid-template-columns:minmax(0,1fr) 8.5em auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.urow:first-child{border-top:0}
+.urow .uid{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.urow .pill{justify-self:start}
+.savebar{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));z-index:9;background:var(--accent-soft);border-top:1px solid var(--accent)}
+.savebar .wrap{display:flex;align-items:center;gap:8px;padding-block:8px}
+.savebar span{flex:1;font-size:14px;font-weight:700}
+ul.plain{margin:0;padding-left:1.2em;display:grid;gap:4px;font-size:14px}
+
+.gate{min-height:100vh;display:grid;place-items:center;padding-block:40px}
+.gate .card{width:100%;max-width:420px;margin:0 auto}
+.crest{display:grid;gap:2px}
+.crest .team{font-size:13px;color:var(--ink-2);letter-spacing:.1em}
+.crest .name{font-size:24px;font-weight:700;line-height:1.3}
+.crest .yen{font-family:var(--font-num);font-size:15px;color:var(--ink-2)}
+
+.toast{position:fixed;left:0;right:0;margin:0 auto;width:max-content;bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;z-index:40;font-size:14px;max-width:calc(100% - 32px);text-align:center}
+.sheet-bg{position:fixed;inset:0;background:var(--scrim);z-index:30;display:flex;align-items:flex-end}
+.sheet{background:var(--surface);border-radius:16px 16px 0 0;width:100%;max-width:640px;margin:0 auto;display:grid;gap:14px;padding-top:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sheet p{font-size:15px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"><div class="gate wrap"><p class="hint">読み込んでいます…</p></div></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script>
+(() => {
+'use strict';
+
+/* ================= 設定 ================= */
+const CFG = window.HAISHA_CONFIG || {};
+const FB = window.firebase;
+const LOGIN_DOMAIN = CFG.loginDomain || 'haisha.example.com';
+const TEAM = CFG.teamName || '時津サンダース';
+const LS_ID = 'haisha.lastId';
+const ROLE_LABEL = { admin: '管理者', editor: '担当者', viewer: '閲覧' };
+
+const $app = document.getElementById('app');
+const $toast = document.getElementById('toast');
+
+/* ================= 状態 ================= */
+const S = {
+  phase: 'boot', errMsg: '',
+  user: null, role: null,
+  master: null, games: new Map(), pool: new Map(), roles: new Map(),
+  view: 'games', gameId: null, gameTab: 'collect',
+  newGame: null, poolForm: null, addMember: null, importMsg: '',
+  draft: null, draftDirty: false,
+  subs: [], pending: 0, writeErr: null, online: navigator.onLine,
+  confirm: null, busy: false, loginErr: '', acctMsg: '', userMsg: '',
+  bootstrapping: false, renderPending: false
+};
+let app = null, auth = null, db = null;
+
+/* ================= 小道具 ================= */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = n => Math.round(Number(n) || 0).toLocaleString('ja-JP');
+const yen = n => (n < 0 ? '−' : '') + num(Math.abs(n)) + '円';
+const rid = p => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const normId = s => String(s || '').trim().toLowerCase();
+const toEmail = id => id.includes('@') ? id : id + '@' + LOGIN_DOMAIN;
+const fromEmail = em => String(em || '').endsWith('@' + LOGIN_DOMAIN) ? em.slice(0, -(LOGIN_DOMAIN.length + 1)) : String(em || '');
+const clone = o => JSON.parse(JSON.stringify(o));
+const WD = ['日','月','火','水','木','金','土'];
+function fmtDate(iso){
+  if (!iso) return '日付なし';
+  const [y, m, d] = iso.split('-').map(Number);
+  return `${m}/${d}（${WD[new Date(y, m - 1, d).getDay()]}）`;
+}
+function todayISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+let toastTimer = null;
+function toast(msg){
+  $toast.textContent = msg; $toast.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { $toast.hidden = true; }, 2600);
+}
+function pwProblem(pw){
+  if (pw.length < 8) return 'パスワードは8文字以上にしてください。';
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return 'パスワードには英字と数字を両方含めてください。';
+  return '';
+}
+const canEdit = () => !!(S.role && (S.role.role === 'admin' || S.role.role === 'editor'));
+const isAdmin = () => !!(S.role && S.role.role === 'admin');
+function authMsg(e){
+  const c = e && e.code || '';
+  if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return 'IDまたはパスワードが正しくありません。';
+  if (/too-many-requests/.test(c)) return '失敗が続いたため、しばらくログインできません。時間をおいてお試しください。';
+  if (/network-request-failed/.test(c)) return '通信できませんでした。電波の良い場所でもう一度お試しください。';
+  if (/email-already-in-use/.test(c)) return 'このIDはすでに使われています。別のIDにしてください。';
+  if (/invalid-email/.test(c)) return 'IDに使えない文字が含まれています。';
+  if (/weak-password/.test(c)) return 'パスワードが短すぎます。';
+  if (/requires-recent-login/.test(c)) return '安全のため、いまのパスワードをもう一度入力してください。';
+  if (/permission-denied/.test(c)) return 'この操作をする権限がありません。';
+  return '処理できませんでした（' + c + '）。';
+}
+
+const ICON = {
+  list:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+  coin:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><ellipse cx="12" cy="6.5" rx="7" ry="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M5 6.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5M5 11.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" stroke="currentColor" stroke-width="2" fill="none"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h2M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="16" cy="7" r="2.5" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="17" r="2.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>'
+};
+
+/* ================= 計算 ================= */
+function hhName(id, m){ const h = (m || S.master).households.find(x => x.id === id); return h ? h.name : '（世帯なし）'; }
+function coachName(id, m){ const c = (m || S.master).coaches.find(x => x.id === id); return c ? c.name : '（指導者）'; }
+function activeMemberIds(){ return S.master.members.filter(x => x.active !== false).map(x => x.id); }
+
+// 集金額A ＝ 単価 × 集金対象の部員数（欠席は除く。配車当番の世帯は1人分免除）
+// 1台あたり ＝ A ÷ 台数（保護者＋指導者）を端数単位未満で切り捨て。あまりはプールへ。
+function calc(g, m){
+  m = m || S.master;
+  const price = Number(g.price) || 0, unit = Number(g.roundUnit) || 100;
+  const memById = new Map(m.members.map(x => [x.id, x]));
+  const absent = new Set(g.absent || []), drivers = new Set(g.drivers || []);
+  const groups = new Map();
+  for (const mid of g.members || []){
+    const mem = memById.get(mid); if (!mem) continue;
+    let r = groups.get(mem.hh); if (!r){ r = { hh: mem.hh, members: [] }; groups.set(mem.hh, r); }
+    r.members.push(mem);
+  }
+  const rows = [];
+  for (const r of groups.values()){
+    r.members.sort((a, b) => (Number(a.no) || 999) - (Number(b.no) || 999));
+    const present = r.members.filter(x => !absent.has(x.id)).length;
+    const isDriver = drivers.has(r.hh);
+    const charge = isDriver ? Math.max(0, present - 1) : present;
+    rows.push({ hh: r.hh, name: hhName(r.hh, m), members: r.members, present, isDriver, charge,
+      exempt: present - charge, due: charge * price, paid: !!(g.paid || {})[r.hh] });
+  }
+  rows.sort((a, b) => (Number(a.members[0].no) || 999) - (Number(b.members[0].no) || 999));
+  const A = rows.reduce((s, r) => s + r.due, 0);
+  const collected = rows.reduce((s, r) => s + (r.paid && r.due > 0 ? r.due : 0), 0);
+  const chargeCount = rows.reduce((s, r) => s + r.charge, 0);
+  const rowByHh = new Map(rows.map(r => [r.hh, r]));
+  const hhCars = (g.drivers || []).filter(id => m.households.some(h => h.id === id))
+    .map(id => ({ key: id, kind: 'hh', name: hhName(id, m), row: rowByHh.get(id) || null }));
+  const coachCars = (g.coachDrivers || []).map(id => ({ key: id, kind: 'coach', name: coachName(id, m), row: null }));
+  const cars = [...hhCars, ...coachCars];
+  const n = cars.length;
+  const per = n > 0 ? Math.floor(A / (n * unit)) * unit : 0;
+  const payTotal = per * n;
+  const paidOut = g.paidOut || {};
+  const paidOutCount = cars.filter(c => paidOut[c.key]).length;
+  const dueRows = rows.filter(r => r.due > 0);
+  return { price, unit, rows, dueRows, A, collected, outstanding: A - collected, chargeCount, cars, n,
+    nHH: hhCars.length, nCoach: coachCars.length, per, payTotal, toPool: A - payTotal,
+    paidOutCount, paidOutAmount: per * paidOutCount, paidCount: dueRows.filter(r => r.paid).length };
+}
+function seasonStats(){
+  const st = { A:0, collected:0, outstanding:0, payTotal:0, paidOutAmount:0, toPool:0 };
+  for (const g of S.games.values()){
+    const c = calc(g);
+    st.A += c.A; st.collected += c.collected; st.outstanding += c.outstanding;
+    st.payTotal += c.payTotal; st.paidOutAmount += c.paidOutAmount; st.toPool += c.toPool;
+  }
+  return st;
+}
+function poolBalance(){
+  let fromGames = 0, income = 0, expense = 0;
+  for (const g of S.games.values()) fromGames += calc(g).toPool;
+  for (const p of S.pool.values()){
+    const a = Number(p.amount) || 0;
+    if (p.kind === 'in') income += a; else expense += a;
+  }
+  return { fromGames, income, expense, balance: income + fromGames - expense };
+}
+
+/* ================= 名簿の既定値（個人情報を含まない部分） ================= */
+function defaultMaster(){
+  const V = [
+    ['ダイヤランド','b500'],['えがわ運動公園','b500'],['なごみの里運動公園','b500'],['東望山グラウンド','b500'],['かきどまり総合運動公園','b500'],
+    ['大村市野球場','b800'],['森園運動広場','b800'],['大村総合運動公園','b800'],
+    ['有明の森運動公園','b1000'],['鴻ノ巣グラウンド','b1000'],['甲辰園グラウンド','b1000'],['波佐見中学校','b1000'],['大悲観公園野球場','b1000']
+  ];
+  return {
+    version: 1, season: '令和9年度', roundUnit: 100,
+    bands: [
+      { id:'b500', label:'往復50km以内', price:500 },
+      { id:'b800', label:'往復79km以内', price:800 },
+      { id:'b1000', label:'往復80km以上', price:1000 }
+    ],
+    venues: V.map(([name, band], i) => ({ id: 'v' + String(i + 1).padStart(2, '0'), name, band })),
+    households: [], members: [],
+    coaches: [{ id:'c1', name:'指導者A', active:true }, { id:'c2', name:'指導者B', active:true }, { id:'c3', name:'指導者C', active:true }]
+  };
+}
+function normalizeMaster(m){
+  for (const k of ['bands','venues','households','members','coaches']) if (!Array.isArray(m[k])) m[k] = [];
+  if (!m.roundUnit) m.roundUnit = 100;
+  if (!m.season) m.season = '';
+  return m;
+}
+
+/* ================= 保存の追跡 ================= */
+function track(p){
+  S.pending++; updateSync();
+  return p.then(() => { S.writeErr = null; }, e => { S.writeErr = authMsg(e); toast(S.writeErr); })
+    .finally(() => { S.pending--; updateSync(); });
+}
+function syncInfo(){
+  if (!canEdit()) return { cls:'sync ro', text:'閲覧のみ' };
+  if (S.writeErr) return { cls:'sync err', text:'保存できず' };
+  if (S.pending > 0) return S.online ? { cls:'sync busy', text:'保存中…' } : { cls:'sync err', text:'電波待ち' };
+  return { cls:'sync', text:'保存済み' };
+}
+function updateSync(){
+  const el = document.getElementById('sync'); if (!el) return;
+  const s = syncInfo(); el.className = s.cls; el.textContent = s.text;
+  el.title = S.pending > 0 && !S.online ? '電波が戻ると自動で送信します（この端末には保存済み）' : (S.writeErr || '');
+}
+window.addEventListener('online', () => { S.online = true; updateSync(); });
+window.addEventListener('offline', () => { S.online = false; updateSync(); });
+
+/* ================= 起動・ログイン ================= */
+async function boot(){
+  const c = CFG.firebase || {};
+  if (!FB || !c.apiKey || !c.projectId){ S.phase = 'noconfig'; render(); return; }
+  app = FB.initializeApp(c);
+  auth = app.auth(); db = app.firestore();
+  try { await db.enablePersistence({ synchronizeTabs: true }); } catch (_){ /* 非対応の端末ではオンラインのみ */ }
+  auth.onAuthStateChanged(onAuth);
+}
+async function onAuth(user){
+  if (S.bootstrapping) return;
+  unsubAll();
+  S.games = new Map(); S.pool = new Map(); S.roles = new Map(); S.master = null; S.role = null; S.draft = null; S.draftDirty = false;
+  if (!user){
+    S.user = null;
+    try { const b = await db.doc('meta/bootstrap').get(); S.phase = b.exists ? 'login' : 'setup'; }
+    catch (_){ S.phase = 'login'; }
+    render(); return;
+  }
+  S.user = user;
+  let r;
+  try { r = await db.doc('roles/' + user.uid).get(); }
+  catch (e){ S.phase = 'error'; S.errMsg = '権限を確認できませんでした。電波の良い場所でページを開き直してください。'; render(); return; }
+  if (!r.exists){ S.phase = 'norole'; render(); return; }
+  S.role = r.data();
+  if (S.role.mustChange){ S.phase = 'changepw'; S.loginErr = ''; render(); return; }
+  startApp();
+}
+function startApp(){
+  S.phase = 'app'; S.view = 'games'; S.busy = false;
+  const fail = e => {
+    if (e && e.code === 'permission-denied'){ S.phase = 'norole'; render(); return; }
+    S.writeErr = '最新のデータを受信できません'; updateSync();
+  };
+  S.subs.push(db.doc('roles/' + S.user.uid).onSnapshot(s => {
+    if (!s.exists){ unsubAll(); S.phase = 'norole'; render(); return; }
+    const before = S.role && S.role.role; S.role = s.data();
+    if (before !== S.role.role) requestRender();
+  }, fail));
+  S.subs.push(db.doc('master/main').onSnapshot(s => {
+    if (s.exists) S.master = normalizeMaster(clone(s.data()));
+    else {
+      S.master = defaultMaster();
+      if (canEdit() && !s.metadata.fromCache) track(db.doc('master/main').set(S.master));
+    }
+    requestRender();
+  }, fail));
+  const coll = (name, map) => db.collection(name).onSnapshot(snap => {
+    for (const ch of snap.docChanges()){
+      if (ch.type === 'removed') map.delete(ch.doc.id);
+      else map.set(ch.doc.id, { ...ch.doc.data(), id: ch.doc.id });
+    }
+    requestRender();
+  }, fail);
+  S.subs.push(coll('games', S.games));
+  S.subs.push(coll('pool', S.pool));
+  if (isAdmin()) S.subs.push(coll('roles', S.roles));
+  render();
+}
+function unsubAll(){ for (const u of S.subs){ try { u(); } catch (_){} } S.subs = []; }
+
+async function submitLogin(form){
+  const id = normId(form.querySelector('#li-id').value), pw = form.querySelector('#li-pw').value;
+  S.loginId = id;
+  if (!id || !pw){ S.loginErr = 'IDとパスワードを入力してください。'; render(); return; }
+  S.busy = true; S.loginErr = ''; render();
+  try {
+    await auth.signInWithEmailAndPassword(toEmail(id), pw);
+    try { localStorage.setItem(LS_ID, id); } catch (_){}
+  } catch (e){ S.loginErr = authMsg(e); }
+  S.busy = false; if (S.phase === 'login') render();
+}
+async function submitSetup(form){
+  const id = normId(form.querySelector('#su-id').value);
+  const pw = form.querySelector('#su-pw').value, pw2 = form.querySelector('#su-pw2').value;
+  if (!/^[a-z0-9._-]{3,20}$/.test(id)){ S.loginErr = 'IDは半角英数字（3〜20文字）で入力してください。'; render(); return; }
+  const p = pwProblem(pw); if (p){ S.loginErr = p; render(); return; }
+  if (pw !== pw2){ S.loginErr = '確認用のパスワードが一致しません。'; render(); return; }
+  S.busy = true; S.loginErr = ''; S.bootstrapping = true; render();
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(toEmail(id), pw);
+    const uid = cred.user.uid;
+    const batch = db.batch();
+    batch.set(db.doc('roles/' + uid), { role:'admin', loginId:id, mustChange:false, createdAt: Date.now() });
+    batch.set(db.doc('meta/bootstrap'), { adminUid: uid, createdAt: Date.now() });
+    await batch.commit();
+    try { localStorage.setItem(LS_ID, id); } catch (_){}
+    S.bootstrapping = false; S.busy = false;
+    await onAuth(auth.currentUser);
+  } catch (e){
+    S.bootstrapping = false; S.busy = false;
+    S.loginErr = authMsg(e);
+    try { if (auth.currentUser) await auth.signOut(); } catch (_){}
+    render();
+  }
+}
+async function submitChangePw(form, fromSettings){
+  const cur = form.querySelector('.cp0').value, pw = form.querySelector('.np1').value, pw2 = form.querySelector('.np2').value;
+  const setErr = t => { if (fromSettings) S.acctMsg = t; else S.loginErr = t; render(); };
+  if (!cur) return setErr('いまのパスワードを入力してください。');
+  const p = pwProblem(pw); if (p) return setErr(p);
+  if (pw !== pw2) return setErr('確認用のパスワードが一致しません。');
+  if (pw === cur) return setErr('いまと違うパスワードにしてください。');
+  S.busy = true; setErr('');
+  try {
+    const user = auth.currentUser;
+    await user.reauthenticateWithCredential(FB.auth.EmailAuthProvider.credential(user.email, cur));
+    await user.updatePassword(pw);
+    if (S.role && S.role.mustChange) await db.doc('roles/' + user.uid).update({ mustChange: false });
+  } catch (e){ S.busy = false; return setErr(authMsg(e)); }
+  S.busy = false; toast('パスワードを変更しました');
+  if (fromSettings){ S.acctMsg = ''; render(); }
+  else { S.role.mustChange = false; startApp(); }
+}
+async function logout(){
+  unsubAll();
+  try { await auth.signOut(); } catch (_){}
+  // この端末に残った名簿のキャッシュも消す
+  try { await db.terminate(); await db.clearPersistence(); } catch (_){}
+  location.reload();
+}
+
+/* ---------- ID の発行（管理者） ---------- */
+async function submitAddUser(form){
+  const id = normId(form.querySelector('#au-id').value), pw = form.querySelector('#au-pw').value, role = form.querySelector('#au-role').value;
+  if (!/^[a-z0-9._-]{3,20}$/.test(id)){ S.userMsg = 'IDは半角英数字（3〜20文字）で入力してください。'; render(); return; }
+  const p = pwProblem(pw); if (p){ S.userMsg = p; render(); return; }
+  S.busy = true; S.userMsg = ''; render();
+  try {
+    const sec = FB.apps.find(a => a.name === 'creator') || FB.initializeApp(CFG.firebase, 'creator');
+    const sauth = sec.auth();
+    await sauth.setPersistence(FB.auth.Auth.Persistence.NONE);
+    const cred = await sauth.createUserWithEmailAndPassword(toEmail(id), pw);
+    const uid = cred.user.uid;
+    await sauth.signOut();
+    await db.doc('roles/' + uid).set({ role, loginId: id, mustChange: true, createdAt: Date.now(), createdBy: S.user.uid });
+    S.busy = false; toast(`ID「${id}」を発行しました`); render();
+  } catch (e){ S.busy = false; S.userMsg = authMsg(e); render(); }
+}
+
+/* ================= 描画 ================= */
+function isTyping(){
+  const a = document.activeElement;
+  if (!a || !$app.contains(a)) return false;
+  return a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['checkbox','button','submit','radio','file'].includes(a.type));
+}
+function requestRender(){ if (isTyping()){ S.renderPending = true; return; } render(); }
+function render(){
+  S.renderPending = false;
+  let h = '';
+  switch (S.phase){
+    case 'boot': h = gate('<p class="hint">読み込んでいます…</p>'); break;
+    case 'noconfig': h = gate(`${crest()}<p>Firebase の設定値がまだ入っていません。</p><p class="hint">リポジトリの config.js に firebaseConfig の値を入れてください。</p>`); break;
+    case 'error': h = gate(`${crest()}<p>${esc(S.errMsg)}</p><button type="button" class="btn sec" data-act="reload">開き直す</button>`); break;
+    case 'norole': h = gate(`${crest()}<p>このIDには、まだ閲覧の権限がありません。</p><p class="hint">配車費の担当者に連絡してください。</p><button type="button" class="btn sec" data-act="logout">ログアウト</button>`); break;
+    case 'setup': h = viewSetup(); break;
+    case 'login': h = viewLogin(); break;
+    case 'changepw': h = viewChangePw(); break;
+    case 'app': h = S.master ? viewApp() : gate('<p class="hint">名簿を読み込んでいます…</p>'); break;
+  }
+  h += viewConfirm();
+  $app.innerHTML = h;
+  updateSync();
+}
+function gate(inner){ return `<div class="gate wrap"><div class="card">${inner}</div></div>`; }
+function crest(){ return `<div class="crest"><span class="team">${esc(TEAM)}</span><span class="name">配車費の集金</span><span class="yen">500 / 800 / 1,000 円</span></div>`; }
+function viewLogin(){
+  let last = S.loginId;
+  if (last === undefined){ try { last = localStorage.getItem(LS_ID) || ''; } catch (_){ last = ''; } }
+  return gate(`${crest()}
+    <form data-form="login" class="plainform" autocomplete="on">
+      <div class="field"><label for="li-id">ID</label><input id="li-id" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" value="${esc(last)}"></div>
+      <div class="field"><label for="li-pw">パスワード</label><input id="li-pw" name="password" type="password" autocomplete="current-password"></div>
+      ${S.loginErr ? `<p class="err" role="alert">${esc(S.loginErr)}</p>` : ''}
+      <button class="btn block" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? '<span class="spin"></span>確認しています…' : 'ログイン'}</button>
+    </form>
+    <p class="hint">IDとパスワードは配車費の担当者から受け取ってください。</p>`);
+}
+function viewSetup(){
+  return gate(`${crest()}
+    <p><b>初期設定</b>　最初の管理者のIDとパスワードを決めてください。この画面は最初の1回だけ表示されます。</p>
+    <form data-form="setup" class="plainform">
+      <div class="field"><label for="su-id">ID（半角英数字）</label><input id="su-id" name="username" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
+      <div class="field"><label for="su-pw">パスワード（8文字以上・英字と数字）</label><input id="su-pw" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="su-pw2">パスワード（確認）</label><input id="su-pw2" type="password" autocomplete="new-password"></div>
+      ${S.loginErr ? `<p class="err" role="alert">${esc(S.loginErr)}</p>` : ''}
+      <button class="btn block" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? '<span class="spin"></span>作成しています…' : '管理者を作成して始める'}</button>
+    </form>`);
+}
+function viewChangePw(){
+  return gate(`${crest()}
+    <p><b>初回ログインです。</b>受け取ったパスワードを、自分だけが知っているものに変更してください。</p>
+    <form data-form="changepw" class="plainform">
+      <input type="text" name="username" value="${esc(fromEmail(S.user && S.user.email))}" autocomplete="username" hidden>
+      <div class="field"><label for="cp-0">受け取ったパスワード</label><input id="cp-0" class="cp0" type="password" autocomplete="current-password"></div>
+      <div class="field"><label for="cp-1">新しいパスワード（8文字以上・英字と数字）</label><input id="cp-1" class="np1" type="password" autocomplete="new-password"></div>
+      <div class="field"><label for="cp-2">新しいパスワード（確認）</label><input id="cp-2" class="np2" type="password" autocomplete="new-password"></div>
+      ${S.loginErr ? `<p class="err" role="alert">${esc(S.loginErr)}</p>` : ''}
+      <button class="btn block" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? '<span class="spin"></span>変更しています…' : '変更して始める'}</button>
+    </form>
+    <button type="button" class="btn sec" data-act="logout">ログアウト</button>`);
+}
+
+function viewApp(){
+  const nav = [['games','試合',ICON.list],['pool','プール',ICON.coin],['settings', canEdit() ? '設定' : 'アカウント', ICON.gear]];
+  const body = S.view === 'game' ? viewGame() : S.view === 'pool' ? viewPool() : S.view === 'settings' ? viewSettings() : viewGames();
+  const s = syncInfo();
+  return `<header class="topbar"><div class="wrap">
+      <div class="brand"><b>${esc(TEAM)} 配車費</b><small>${esc(S.master.season)}・${esc(fromEmail(S.user.email))}（${ROLE_LABEL[S.role.role] || ''}）</small></div>
+      <span id="sync" class="${s.cls}">${s.text}</span>
+    </div></header>
+    <main class="wrap">${body}</main>
+    ${S.view === 'settings' && canEdit() ? `<div id="savebar" class="savebar" ${S.draftDirty ? '' : 'hidden'}><div class="wrap"><span>保存していない変更があります</span>
+      <button type="button" class="btn sec small" data-act="draft-reset">元に戻す</button>
+      <button type="button" class="btn small" data-act="draft-save">保存する</button></div></div>` : ''}
+    <nav class="tabs" aria-label="メニュー"><div class="wrap">${nav.map(([k, l, i]) =>
+      `<button type="button" data-act="nav" data-v="${k}" ${(S.view === k || (k === 'games' && S.view === 'game')) ? 'aria-current="page"' : ''}>${i}<span>${l}</span></button>`).join('')}</div></nav>`;
+}
+
+/* ---------- 試合一覧 ---------- */
+function venueOptions(selected, withOther){
+  const m = S.master;
+  let h = '';
+  for (const b of m.bands){
+    const vs = m.venues.filter(v => v.band === b.id);
+    if (!vs.length) continue;
+    h += `<optgroup label="${esc(b.price + '円（' + b.label + '）')}">${vs.map(v => `<option value="${v.id}" ${v.id === selected ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</optgroup>`;
+  }
+  if (withOther) h += `<option value="__other" ${selected === '__other' ? 'selected' : ''}>その他（一覧にない行先）</option>`;
+  return h;
+}
+function bandOptions(selected){
+  return S.master.bands.map(b => `<option value="${b.id}" ${b.id === selected ? 'selected' : ''}>${b.price}円（${esc(b.label)}）</option>`).join('');
+}
+function viewGames(){
+  const games = [...S.games.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+  const st = seasonStats(), pb = poolBalance();
+  const ng = S.newGame;
+  let form = '';
+  if (canEdit()) form = ng ? `<section class="card" aria-label="試合を追加">
+      <h3>試合を追加</h3>
+      <div class="grid2">
+        <div class="field"><label for="ng-date">日付</label><input type="date" id="ng-date" value="${esc(ng.date)}"></div>
+        <div class="field"><label for="ng-venue">行先</label><select id="ng-venue" data-on="ng-venue">${venueOptions(ng.venueId, true)}</select></div>
+      </div>
+      ${ng.venueId === '__other' ? `<div class="grid2">
+        <div class="field"><label for="ng-vname">行先の名前</label><input id="ng-vname" value="${esc(ng.vname)}"></div>
+        <div class="field"><label for="ng-band">距離の区分</label><select id="ng-band">${bandOptions(ng.band)}</select></div>
+      </div>` : ''}
+      <div class="btnrow"><button type="button" class="btn sec" data-act="ng-cancel">やめる</button><button type="button" class="btn" data-act="ng-create">作成する</button></div>
+    </section>` : `<button type="button" class="btn block" data-act="new-game">${ICON.plus}試合を追加</button>`;
+  const noRoster = !S.master.members.length ? `<p class="note warn">名簿がまだ登録されていません。${canEdit() ? '「設定」の「名簿ファイルの読み込み」から登録してください。' : ''}</p>` : '';
+  return `${noRoster}<section class="stats" aria-label="今年度の集計">
+      <div><span>試合</span><b>${games.length}</b></div>
+      <div><span>回収済み</span><b>${yen(st.collected)}</b></div>
+      <div><span>未収</span><b class="${st.outstanding > 0 ? 'warn' : ''}">${yen(st.outstanding)}</b></div>
+      <div><span>プール残高</span><b>${yen(pb.balance)}</b></div>
+    </section>
+    ${form}
+    <section class="list" aria-label="試合の一覧">${games.length ? games.map(gameCard).join('') :
+      `<p class="empty">まだ試合がありません。${canEdit() ? '「試合を追加」で日付と行先を選ぶと、その日の集金リストができます。' : ''}</p>`}</section>`;
+}
+function gameStatus(c){
+  if (c.n === 0) return ['', '配車未登録'];
+  if (c.outstanding > 0) return ['warn', '未収あり'];
+  if (c.paidOutCount < c.n) return ['accent', '未支給あり'];
+  return ['ok', '完了'];
+}
+function gameCard(g){
+  const c = calc(g), [cls, label] = gameStatus(c);
+  return `<button type="button" class="gcard" data-act="open-game" data-id="${esc(g.id)}">
+    <span class="gdate"><b>${fmtDate(g.date)}</b></span>
+    <span class="gmain"><span class="gvenue">${esc(g.venueName)}</span>
+      <span class="gsub">集金 ${c.paidCount}/${c.dueRows.length}世帯・支給 ${c.paidOutCount}/${c.n}台</span></span>
+    <span class="gside"><span class="price">${num(g.price)}<small>円</small></span><span class="pill ${cls}">${label}</span></span>
+  </button>`;
+}
+
+/* ---------- 試合 ---------- */
+function viewGame(){
+  const g = S.games.get(S.gameId);
+  if (!g){ S.view = 'games'; return viewGames(); }
+  const c = calc(g);
+  const pct = c.A > 0 ? Math.min(100, Math.round(c.collected / c.A * 100)) : 0;
+  const tabs = [['setup', canEdit() ? '準備' : '内容', `${c.n}台`],['collect','集金',`${c.paidCount}/${c.dueRows.length}`],['payout','支給',`${c.paidOutCount}/${c.n}`]];
+  const body = S.gameTab === 'setup' ? tabSetup(g, c) : S.gameTab === 'payout' ? tabPayout(g, c) : tabCollect(g, c);
+  return `<div class="gtitle">
+      <button type="button" class="back" data-act="nav" data-v="games">‹ 試合一覧</button>
+      <h1>${fmtDate(g.date)} ${esc(g.venueName)}</h1>
+      <div class="gmeta"><span class="pill accent">${num(g.price)}円・${esc((S.master.bands.find(b => b.id === g.bandId) || {}).label || '')}</span></div>
+    </div>
+    <section class="board" aria-label="この試合の金額">
+      <div><div class="k">集金予定</div><div class="v">${num(c.A)}<small>円</small></div><div class="s">${num(c.price)}円 × ${c.chargeCount}人</div></div>
+      <div><div class="k">回収済み</div><div class="v">${num(c.collected)}<small>円</small></div><div class="s">未収 ${num(c.outstanding)}円</div></div>
+      <div class="hi"><div class="k">1台あたり</div><div class="v">${num(c.per)}<small>円</small></div><div class="s">${c.n}台（保護者${c.nHH}・指導者${c.nCoach}）</div></div>
+      <div><div class="k">プールへ</div><div class="v">${num(c.toPool)}<small>円</small></div><div class="s">${num(c.unit)}円未満は切り捨て</div></div>
+      <div class="meter" role="img" aria-label="回収 ${pct}%"><i style="width:${pct}%"></i></div>
+    </section>
+    <div class="seg" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-act="tab" data-t="${k}" aria-selected="${S.gameTab === k}">${l}<small>${n}</small></button>`).join('')}</div>
+    ${body}`;
+}
+function memLabel(mm, absent){
+  const abs = absent.has(mm.id);
+  return `<span class="mem ${abs ? 'abs' : ''}"><span class="no">${esc(mm.no)}</span>${esc(mm.name)}${abs ? '<em>欠席</em>' : ''}</span>`;
+}
+function tapRow(on, attrs, inner){
+  return canEdit()
+    ? `<button type="button" class="row ${on ? 'on' : ''}" ${attrs} aria-pressed="${on}">${inner}</button>`
+    : `<div class="row ${on ? 'on' : ''}">${inner}</div>`;
+}
+function tabCollect(g, c){
+  const absent = new Set(g.absent || []);
+  const due = c.rows.filter(r => r.due > 0), none = c.rows.filter(r => r.due === 0);
+  const rowHtml = r => tapRow(r.paid, `data-act="toggle-paid" data-hh="${esc(r.hh)}"`,
+    `<span class="check" aria-hidden="true">${r.paid ? ICON.check : ''}</span>
+      <span class="who"><b>${esc(r.name)}${r.isDriver ? '<span class="pill accent">配車・1人分免除</span>' : ''}${!canEdit() ? `<span class="pill ${r.paid ? 'ok' : ''}">${r.paid ? '受領済み' : '未受領'}</span>` : ''}</b>
+        <span class="mems">${r.members.map(mm => memLabel(mm, absent)).join('')}</span></span>
+      <span class="amt">${num(r.due)}<small>円</small></span>`);
+  const noneHtml = r => `<div class="row static">
+      <span class="check" aria-hidden="true"></span>
+      <span class="who"><b>${esc(r.name)}<span class="pill">${r.isDriver ? '配車（免除）' : '欠席'}</span></b>
+        <span class="mems">${r.members.map(mm => memLabel(mm, absent)).join('')}</span></span>
+      <span class="amt">0<small>円</small></span></div>`;
+  return `${canEdit() ? '<p class="hint">お金を受け取ったら、その世帯の行をタップしてください。もう一度タップすると取り消せます。</p>' : ''}
+    <div class="list">${due.length ? due.map(rowHtml).join('') : '<p class="empty">集金の対象がありません。</p>'}</div>
+    ${c.outstanding > 0 && c.collected > 0 ? `<p class="note warn">未収 ${yen(c.outstanding)}（${c.dueRows.length - c.paidCount}世帯）</p>` : ''}
+    ${none.length ? `<section><h2>集金なし</h2><div class="list">${none.map(noneHtml).join('')}</div></section>` : ''}`;
+}
+function tabPayout(g, c){
+  if (c.n === 0) return `<div class="card"><p>配車がまだ登録されていません。</p>${canEdit() ? '<button type="button" class="btn sec" data-act="tab" data-t="setup">準備を開く</button>' : ''}</div>`;
+  const paidOut = g.paidOut || {};
+  const avg = (c.A / c.n).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+  const rowHtml = car => {
+    const done = !!paidOut[car.key];
+    const offset = car.row && car.row.due > 0
+      ? `<span class="sub">この世帯から兄弟分 ${yen(car.row.due)} を集金。差し引きで渡すなら ${yen(c.per - car.row.due)}</span>` : '';
+    return tapRow(done, `data-act="toggle-out" data-key="${esc(car.key)}"`,
+      `<span class="check" aria-hidden="true">${done ? ICON.check : ''}</span>
+      <span class="who"><b>${esc(car.name)}<span class="pill">${car.kind === 'coach' ? '指導者' : '保護者'}</span>${!canEdit() ? `<span class="pill ${done ? 'ok' : ''}">${done ? '支給済み' : '未支給'}</span>` : ''}</b>${offset}</span>
+      <span class="amt">${num(c.per)}<small>円</small></span>`);
+  };
+  return `<div class="calc">集金予定 ${yen(c.A)} ÷ ${c.n}台 ＝ ${avg}円 → ${num(c.unit)}円未満を切り捨てて <b>1台 ${yen(c.per)}</b><br>
+      支給合計 ${yen(c.payTotal)}・あまり ${yen(c.toPool)} はプールへ</div>
+    ${c.outstanding > 0 && canEdit() ? `<p class="note warn">未収が ${yen(c.outstanding)} あります。いま手元にある集金は ${yen(c.collected)} です（支給に必要な額は ${yen(c.payTotal)}）。</p>` : ''}
+    ${canEdit() ? '<p class="hint">配車代を渡したら、その車の行をタップしてください。</p>' : ''}
+    <div class="list">${c.cars.map(rowHtml).join('')}</div>
+    ${canEdit() && c.paidOutCount < c.n ? `<button type="button" class="btn sec block" data-act="out-all">全員を支給済みにする</button>` : ''}`;
+}
+function tabSetup(g, c){
+  const m = S.master;
+  const drivers = new Set(g.drivers || []), coachDrivers = new Set(g.coachDrivers || []), absent = new Set(g.absent || []);
+  const memById = new Map(m.members.map(x => [x.id, x]));
+  const gameMembers = (g.members || []).map(id => memById.get(id)).filter(Boolean).sort((a, b) => (Number(a.no) || 999) - (Number(b.no) || 999));
+  if (!canEdit()){
+    const tagList = arr => arr.length ? `<div class="tags">${arr.join('')}</div>` : '<p class="hint">なし</p>';
+    return `<section><h2>配車する保護者<span class="count">${c.nHH}台</span></h2>${tagList(c.cars.filter(x => x.kind === 'hh').map(x => `<span class="tag">${esc(x.name)}</span>`))}</section>
+      <section><h2>配車する指導者<span class="count">${c.nCoach}台</span></h2>${tagList(c.cars.filter(x => x.kind === 'coach').map(x => `<span class="tag">${esc(x.name)}</span>`))}</section>
+      <section><h2>欠席<span class="count">${absent.size}人</span></h2>${tagList(gameMembers.filter(x => absent.has(x.id)).map(x => `<span class="tag"><span class="no">${esc(x.no)}</span>${esc(x.name)}</span>`))}</section>
+      ${g.memo ? `<section><h2>メモ</h2><p>${esc(g.memo)}</p></section>` : ''}`;
+  }
+  const coaches = m.coaches.filter(x => x.active !== false || coachDrivers.has(x.id));
+  const act = activeMemberIds();
+  const cur = new Set(g.members || []);
+  const rosterDiff = act.length !== cur.size || act.some(id => !cur.has(id));
+  return `<section class="card">
+      <div class="grid2">
+        <div class="field"><label for="g-date">日付</label><input type="date" id="g-date" data-on="g-date" value="${esc(g.date)}"></div>
+        <div class="field"><label for="g-venue">行先</label><select id="g-venue" data-on="g-venue">${g.venueId ? '' : `<option value="__other" selected>${esc(g.venueName)}（一覧にない行先）</option>`}${venueOptions(g.venueId, !!g.venueId)}</select></div>
+      </div>
+      ${g.venueId ? '' : `<div class="field"><label for="g-vname">行先の名前</label><input id="g-vname" data-on="g-vname" value="${esc(g.venueName)}"></div>`}
+      <div class="field"><span class="lbl">単価</span><div class="chips">${m.bands.map(b =>
+        `<button type="button" class="chip" data-act="g-band" data-b="${b.id}" aria-pressed="${g.bandId === b.id}">${num(b.price)}円<small>${esc(b.label)}</small></button>`).join('')}</div></div>
+    </section>
+    <section><h2>配車する保護者<span class="count">${c.nHH}台</span></h2>
+      <div class="chips">${c.rows.map(r => `<button type="button" class="chip" data-act="g-driver" data-hh="${esc(r.hh)}" aria-pressed="${drivers.has(r.hh)}">${esc(r.name)}</button>`).join('') || '<p class="hint">名簿に世帯がありません。</p>'}</div></section>
+    <section><h2>配車する指導者<span class="count">${c.nCoach}台</span></h2>
+      <div class="chips">${coaches.map(x => `<button type="button" class="chip" data-act="g-coach" data-c="${esc(x.id)}" aria-pressed="${coachDrivers.has(x.id)}">${esc(x.name)}</button>`).join('') || '<p class="hint">設定で指導者を登録してください。</p>'}</div></section>
+    <section><h2>欠席する部員<span class="count">${absent.size}人</span></h2>
+      <p class="hint">欠席した部員は集金の対象から外れます。</p>
+      <div class="chips">${gameMembers.map(mm => `<button type="button" class="chip abs" data-act="g-absent" data-m="${esc(mm.id)}" aria-pressed="${absent.has(mm.id)}"><span class="no">${esc(mm.no)}</span>${esc(mm.name)}</button>`).join('')}</div></section>
+    ${rosterDiff ? `<div class="note accent">名簿がこの試合の作成後に変わっています。<div class="btnrow" style="margin-top:8px"><button type="button" class="btn sec small" data-act="g-sync-roster">いまの名簿をこの試合に反映</button></div></div>` : ''}
+    <div class="field"><label for="g-memo">メモ</label><textarea id="g-memo" rows="3" data-on="g-memo">${esc(g.memo)}</textarea></div>
+    <button type="button" class="btn danger block" data-act="g-delete">この試合を削除</button>`;
+}
+
+/* ---------- プール ---------- */
+const POOL_CATS = { out: ['駐車場代','指導者の昼食代補助','その他の支出'], in: ['前年度からの繰越','その他の収入'] };
+function viewPool(){
+  const pb = poolBalance();
+  const items = [];
+  for (const g of S.games.values()){
+    const c = calc(g);
+    if (c.toPool !== 0) items.push({ date: g.date, kind: 'game', title: '試合のあまり', sub: g.venueName, amount: c.toPool, gid: g.id, t: g.createdAt || 0 });
+  }
+  for (const p of S.pool.values()) items.push({ date: p.date, kind: p.kind, title: p.cat, sub: p.memo, amount: p.kind === 'in' ? Number(p.amount) : -Number(p.amount), pid: p.id, t: p.createdAt || 0 });
+  items.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.t - a.t);
+  const f = S.poolForm;
+  let form = '';
+  if (canEdit()) form = f ? `<form data-form="pool" class="card" aria-label="支出・収入を記録">
+      <h3>支出・収入を記録</h3>
+      <div class="grid2">
+        <div class="field"><label for="pf-date">日付</label><input type="date" id="pf-date" value="${esc(f.date)}"></div>
+        <div class="field"><label for="pf-cat">区分</label><select id="pf-cat">
+          <optgroup label="支出">${POOL_CATS.out.map(x => `<option value="out:${x}" ${f.cat === 'out:' + x ? 'selected' : ''}>${x}</option>`).join('')}</optgroup>
+          <optgroup label="収入">${POOL_CATS.in.map(x => `<option value="in:${x}" ${f.cat === 'in:' + x ? 'selected' : ''}>${x}</option>`).join('')}</optgroup></select></div>
+        <div class="field"><label for="pf-amt">金額（円）</label><input id="pf-amt" type="number" inputmode="numeric" min="1" step="1" value="${esc(f.amount)}"></div>
+        <div class="field"><label for="pf-memo">内容メモ</label><input id="pf-memo" value="${esc(f.memo)}"></div>
+      </div>
+      ${f.err ? `<p class="err">${esc(f.err)}</p>` : ''}
+      <div class="btnrow"><button type="button" class="btn sec" data-act="pool-cancel">やめる</button><button type="submit" class="btn">記録する</button></div>
+    </form>` : `<button type="button" class="btn block" data-act="pool-new">${ICON.plus}支出・収入を記録</button>`;
+  return `<section class="board" aria-label="プール残高">
+      <div class="wide hi"><div class="k">プール残高</div><div class="v big">${pb.balance < 0 ? '−' : ''}${num(Math.abs(pb.balance))}<small>円</small></div></div>
+      <div><div class="k">試合のあまり</div><div class="v">${num(pb.fromGames)}<small>円</small></div></div>
+      <div><div class="k">繰越・収入</div><div class="v">${num(pb.income)}<small>円</small></div></div>
+      <div><div class="k">支出</div><div class="v">${num(pb.expense)}<small>円</small></div></div>
+    </section>
+    <p class="hint">プールは駐車場代や指導者の昼食代補助に使います。試合のあまりは自動で入ります。</p>
+    ${form}
+    ${items.length ? `<div class="ledger">${items.map(it => {
+      const a = `<span class="a ${it.amount >= 0 ? 'plus' : 'minus'}">${it.amount >= 0 ? '+' : '−'}${num(Math.abs(it.amount))}</span>`;
+      const d = `<span class="d">${it.date ? Number(it.date.slice(5, 7)) + '/' + Number(it.date.slice(8, 10)) : ''}</span>`;
+      if (it.kind === 'game') return `<div class="lrow">${d}<button type="button" class="linkbtn t" data-act="open-game" data-id="${esc(it.gid)}"><b>${esc(it.title)}</b><span>${esc(it.sub)}</span></button>${a}<span class="sp"></span></div>`;
+      return `<div class="lrow">${d}<span class="t"><b>${esc(it.title)}</b><span>${esc(it.sub || '')}</span></span>${a}${canEdit() ? `<button type="button" class="x" data-act="pool-del" data-id="${esc(it.pid)}" aria-label="この記録を削除">×</button>` : '<span class="sp"></span>'}</div>`;
+    }).join('')}</div>` : '<p class="empty">まだ記録がありません。</p>'}`;
+}
+
+/* ---------- 設定 ---------- */
+function accountCard(){
+  return `<section class="card">
+      <h3>自分のアカウント</h3>
+      <p>ID：<b>${esc(fromEmail(S.user.email))}</b>（${ROLE_LABEL[S.role.role] || ''}）</p>
+      <form data-form="pw" class="grid2">
+        <input type="text" name="username" value="${esc(fromEmail(S.user.email))}" autocomplete="username" hidden>
+        <div class="field"><label for="sp-0">いまのパスワード</label><input id="sp-0" class="cp0" type="password" autocomplete="current-password"></div>
+        <div class="field"><label for="sp-1">新しいパスワード</label><input id="sp-1" class="np1" type="password" autocomplete="new-password"></div>
+        <div class="field"><label for="sp-2">新しいパスワード（確認）</label><input id="sp-2" class="np2" type="password" autocomplete="new-password"></div>
+        <button type="submit" class="btn sec" ${S.busy ? 'disabled' : ''}>パスワードを変更</button>
+      </form>
+      ${S.acctMsg ? `<p class="err" role="alert">${esc(S.acctMsg)}</p>` : ''}
+      <button type="button" class="btn danger" data-act="logout">ログアウト（この端末の記録も消去）</button>
+    </section>`;
+}
+function usersCard(){
+  const list = [...S.roles.entries()].map(([uid, r]) => ({ uid, ...r })).sort((a, b) => {
+    const order = { admin: 0, editor: 1, viewer: 2 };
+    return (order[a.role] ?? 3) - (order[b.role] ?? 3) || String(a.loginId).localeCompare(String(b.loginId));
+  });
+  return `<section class="card">
+      <h3>IDの発行と権限</h3>
+      <p class="hint">閲覧は見るだけ、担当者は試合・集金・支給・プールを編集できます。IDを削除すると、その人はすぐに見られなくなります。</p>
+      <div>${list.map(u => `<div class="urow">
+          <span class="uid">${esc(u.loginId)}${u.uid === S.user.uid ? '（あなた）' : ''}${u.mustChange ? ' <span class="pill warn">初回変更待ち</span>' : ''}</span>
+          ${u.uid === S.user.uid ? `<span class="pill accent">${ROLE_LABEL[u.role]}</span>` :
+            `<select data-on="role-change" data-uid="${esc(u.uid)}" aria-label="${esc(u.loginId)}の権限">${['viewer','editor','admin'].map(k => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${ROLE_LABEL[k]}</option>`).join('')}</select>`}
+          ${u.uid === S.user.uid ? '<span></span>' : `<button type="button" class="x" data-act="user-del" data-uid="${esc(u.uid)}" data-name="${esc(u.loginId)}" aria-label="${esc(u.loginId)}を削除">×</button>`}
+        </div>`).join('')}</div>
+      <form data-form="adduser" class="grid2">
+        <div class="field"><label for="au-id">新しいID（半角英数字）</label><input id="au-id" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="例：oba"></div>
+        <div class="field"><label for="au-pw">最初のパスワード</label><input id="au-pw" type="text" autocomplete="off" spellcheck="false"></div>
+        <div class="field"><label for="au-role">権限</label><select id="au-role"><option value="viewer">閲覧</option><option value="editor">担当者</option></select></div>
+        <button type="submit" class="btn sec" ${S.busy ? 'disabled' : ''}>IDを発行</button>
+      </form>
+      ${S.userMsg ? `<p class="err" role="alert">${esc(S.userMsg)}</p>` : ''}
+      <p class="hint">発行した人は、最初のログインでパスワードを変更します。パスワードを忘れた人には、新しいIDを発行して古いIDを削除してください。</p>
+    </section>`;
+}
+function viewSettings(){
+  if (!canEdit()) return `<h1>アカウント</h1>${accountCard()}`;
+  if (!S.draft){ S.draft = clone(S.master); S.draftDirty = false; }
+  const d = S.draft;
+  const hhOpts = sel => d.households.map(h => `<option value="${esc(h.id)}" ${h.id === sel ? 'selected' : ''}>${esc(h.name)}</option>`).join('');
+  const minNo = h => Math.min(...d.members.filter(x => x.hh === h.id).map(x => Number(x.no) || 999), 999);
+  const hhs = [...d.households].sort((a, b) => minNo(a) - minNo(b));
+  const orphan = d.members.filter(x => !d.households.some(h => h.id === x.hh));
+  const mrow = x => `<div class="mrow">
+      <input type="number" inputmode="numeric" data-bind="m.no" data-id="${esc(x.id)}" value="${esc(x.no)}" aria-label="背番号">
+      <input data-bind="m.name" data-id="${esc(x.id)}" value="${esc(x.name)}" aria-label="氏名">
+      <label class="tog"><input type="checkbox" data-bind="m.active" data-id="${esc(x.id)}" ${x.active !== false ? 'checked' : ''}>在籍</label>
+      <select class="hhsel" data-bind="m.hh" data-id="${esc(x.id)}" aria-label="世帯">${orphan.includes(x) ? '<option value="" selected>世帯を選ぶ</option>' : ''}${hhOpts(x.hh)}</select>
+    </div>`;
+  const am = S.addMember;
+  const addForm = am ? `<div class="card" style="background:var(--surface-2);border:0">
+      <div class="grid2">
+        <div class="field"><label for="am-no">背番号</label><input id="am-no" type="number" inputmode="numeric" value="${esc(am.no)}"></div>
+        <div class="field"><label for="am-name">氏名</label><input id="am-name" value="${esc(am.name)}"></div>
+        <div class="field"><label for="am-hh">世帯</label><select id="am-hh" data-on="am-hh"><option value="__new" ${am.hh === '__new' ? 'selected' : ''}>新しい世帯をつくる</option>${hhOpts(am.hh)}</select></div>
+        ${am.hh === '__new' ? `<div class="field"><label for="am-hhname">新しい世帯の名前</label><input id="am-hhname" placeholder="例：田中家" value="${esc(am.hhName)}"></div>` : ''}
+      </div>
+      ${am.err ? `<p class="err">${esc(am.err)}</p>` : ''}
+      <div class="btnrow"><button type="button" class="btn sec small" data-act="am-cancel">やめる</button><button type="button" class="btn small" data-act="am-add">名簿に加える</button></div>
+    </div>` : '';
+  return `<h1>設定</h1>
+    <section class="card">
+      <h3>名簿ファイルの読み込み</h3>
+      <p class="hint">配車費アプリ用の名簿ファイル（.json）を選ぶと、部員と世帯を入れ替えます。読み込んだあと「保存する」を押すまで確定しません。</p>
+      <input type="file" id="imp-file" accept=".json,application/json" aria-label="名簿ファイルを選ぶ">
+      ${S.importMsg ? `<p class="note accent">${esc(S.importMsg)}</p>` : ''}
+    </section>
+    <section class="card">
+      <h3>部員と世帯</h3>
+      <p class="hint">兄弟は同じ世帯にまとめます。配車当番の世帯は、兄弟がいれば1人分だけ免除されます。部員がやめたときは削除せず「在籍」を外してください（過去の記録が残ります）。</p>
+      ${hhs.map(h => `<div class="hh">
+          <div class="field"><label for="hh-${esc(h.id)}">世帯名</label><input id="hh-${esc(h.id)}" data-bind="hh.name" data-id="${esc(h.id)}" value="${esc(h.name)}"></div>
+          ${d.members.filter(x => x.hh === h.id).sort((a, b) => (Number(a.no) || 999) - (Number(b.no) || 999)).map(mrow).join('') || '<p class="hint">この世帯には部員がいません。</p>'}
+        </div>`).join('') || '<p class="hint">まだ登録されていません。</p>'}
+      ${orphan.length ? `<div class="hh"><p class="lbl">世帯が未設定の部員</p>${orphan.map(mrow).join('')}</div>` : ''}
+      ${addForm || `<button type="button" class="btn sec block" data-act="am-open">${ICON.plus}部員を追加</button>`}
+    </section>
+    <section class="card">
+      <h3>指導者（配車する人）</h3>
+      ${d.coaches.map(x => `<div class="crow"><input data-bind="c.name" data-id="${esc(x.id)}" value="${esc(x.name)}" aria-label="指導者の名前">
+        <label class="tog"><input type="checkbox" data-bind="c.active" data-id="${esc(x.id)}" ${x.active !== false ? 'checked' : ''}>表示</label></div>`).join('') || '<p class="hint">まだ登録されていません。</p>'}
+      <button type="button" class="btn sec block" data-act="set-add-coach">${ICON.plus}指導者を追加</button>
+    </section>
+    <section class="card">
+      <h3>単価と端数</h3>
+      ${d.bands.map(b => `<div class="brow"><input data-bind="b.label" data-id="${esc(b.id)}" value="${esc(b.label)}" aria-label="区分の名前">
+        <input type="number" inputmode="numeric" data-bind="b.price" data-id="${esc(b.id)}" value="${esc(b.price)}" aria-label="単価（円）"></div>`).join('')}
+      <div class="field"><label for="cfg-round">1台あたりの端数</label><select id="cfg-round" data-bind="cfg.roundUnit">
+        <option value="100" ${Number(d.roundUnit) === 100 ? 'selected' : ''}>100円未満を切り捨て</option>
+        <option value="10" ${Number(d.roundUnit) === 10 ? 'selected' : ''}>10円未満を切り捨て</option></select></div>
+      <div class="field"><label for="cfg-season">年度の表示</label><input id="cfg-season" data-bind="cfg.season" value="${esc(d.season)}"></div>
+      <p class="hint">単価と端数の変更は、これから作る試合に使われます。作成済みの試合は作成時の単価のままです。</p>
+    </section>
+    <section class="card">
+      <h3>行先</h3>
+      ${d.venues.map(v => `<div class="vrow"><input data-bind="v.name" data-id="${esc(v.id)}" value="${esc(v.name)}" aria-label="行先の名前">
+        <select data-bind="v.band" data-id="${esc(v.id)}" aria-label="距離の区分">${d.bands.map(b => `<option value="${b.id}" ${b.id === v.band ? 'selected' : ''}>${num(b.price)}円</option>`).join('')}</select>
+        <button type="button" class="x" data-act="set-del-venue" data-id="${esc(v.id)}" aria-label="${esc(v.name)}を削除">×</button></div>`).join('')}
+      <button type="button" class="btn sec block" data-act="set-add-venue">${ICON.plus}行先を追加</button>
+    </section>
+    ${isAdmin() ? usersCard() : ''}
+    <section class="card">
+      <h3>書き出し（CSV）</h3>
+      <p class="hint">会計報告用に、Excelで開けるCSVファイルを保存します。</p>
+      <div class="btnrow">
+        <button type="button" class="btn sec small" data-act="csv" data-k="games">試合別の集計</button>
+        <button type="button" class="btn sec small" data-act="csv" data-k="detail">世帯別の明細</button>
+        <button type="button" class="btn sec small" data-act="csv" data-k="pool">プール台帳</button>
+      </div>
+    </section>
+    ${accountCard()}`;
+}
+
+/* ---------- 確認シート ---------- */
+function viewConfirm(){
+  const c = S.confirm; if (!c) return '';
+  return `<div class="sheet-bg"><div class="sheet" role="dialog" aria-modal="true" aria-label="確認">
+    <p>${esc(c.text)}</p>
+    <div class="btnrow"><button type="button" class="btn sec" data-act="confirm-cancel">やめる</button>
+    <button type="button" class="btn ${c.danger ? 'danger' : ''}" data-act="confirm-ok">${esc(c.ok)}</button></div></div></div>`;
+}
+function ask(text, ok, fn, danger){ S.confirm = { text, ok, fn, danger }; render(); }
+
+/* ================= 操作 ================= */
+const FP = (...p) => new FB.firestore.FieldPath(...p);
+const FV = () => FB.firestore.FieldValue;
+const gref = id => db.collection('games').doc(id);
+function gUpdate(id, ...args){
+  if (!canEdit()) return;
+  args.push('updatedAt', Date.now());
+  track(gref(id).update(...args));
+}
+function setDirty(){ S.draftDirty = true; const sb = document.getElementById('savebar'); if (sb) sb.hidden = false; }
+function goView(v){
+  const doGo = () => {
+    if (v !== 'settings'){ S.draft = null; S.draftDirty = false; S.addMember = null; S.acctMsg = ''; S.userMsg = ''; S.importMsg = ''; }
+    S.view = v; S.newGame = null; S.poolForm = null; render(); window.scrollTo(0, 0);
+  };
+  if (S.view === 'settings' && v !== 'settings' && S.draftDirty) ask('設定に保存していない変更があります。変更を捨てて移動しますか？', '捨てて移動', doGo, true);
+  else doGo();
+}
+
+const CLICK = {
+  'nav': el => goView(el.dataset.v),
+  'reload': () => location.reload(),
+  'logout': () => ask('ログアウトしますか？ この端末に一時保存された名簿と記録も消去します。', 'ログアウト', logout),
+  'new-game': () => {
+    const v = S.master.venues[0];
+    S.newGame = { date: todayISO(), venueId: v ? v.id : '__other', vname: '', band: (S.master.bands[0] || {}).id };
+    render();
+  },
+  'ng-cancel': () => { S.newGame = null; render(); },
+  'ng-create': () => {
+    const m = S.master, ng = S.newGame; if (!ng) return;
+    const dateEl = document.getElementById('ng-date'); if (dateEl) ng.date = dateEl.value;
+    const vn = document.getElementById('ng-vname'); if (vn) ng.vname = vn.value;
+    const bd = document.getElementById('ng-band'); if (bd) ng.band = bd.value;
+    let venueId = ng.venueId, venueName, bandId;
+    if (venueId === '__other'){
+      venueName = (ng.vname || '').trim();
+      if (!venueName){ toast('行先の名前を入力してください'); return; }
+      bandId = ng.band; venueId = null;
+    } else {
+      const v = m.venues.find(x => x.id === venueId);
+      if (!v){ toast('行先を選んでください'); return; }
+      venueName = v.name; bandId = v.band;
+    }
+    const band = m.bands.find(b => b.id === bandId) || m.bands[0];
+    if (!band){ toast('設定で単価を登録してください'); return; }
+    const id = rid('g');
+    const g = { date: ng.date || todayISO(), venueId, venueName, bandId: band.id, price: Number(band.price),
+      roundUnit: Number(m.roundUnit) || 100, members: activeMemberIds(), drivers: [], coachDrivers: [], absent: [],
+      paid: {}, paidOut: {}, memo: '', createdAt: Date.now(), updatedAt: Date.now(), createdBy: S.user.uid };
+    S.games.set(id, { ...g, id });
+    track(gref(id).set(g));
+    S.newGame = null; S.view = 'game'; S.gameId = id; S.gameTab = 'setup'; render(); window.scrollTo(0, 0);
+  },
+  'open-game': el => { S.view = 'game'; S.gameId = el.dataset.id; S.gameTab = 'collect'; render(); window.scrollTo(0, 0); },
+  'tab': el => { S.gameTab = el.dataset.t; render(); },
+  'toggle-paid': el => {
+    const g = S.games.get(S.gameId); if (!g) return;
+    const k = el.dataset.hh, on = !(g.paid || {})[k];
+    gUpdate(g.id, FP('paid', k), on ? true : FV().delete());
+  },
+  'toggle-out': el => {
+    const g = S.games.get(S.gameId); if (!g) return;
+    const k = el.dataset.key, on = !(g.paidOut || {})[k];
+    gUpdate(g.id, FP('paidOut', k), on ? true : FV().delete());
+  },
+  'out-all': () => ask('すべての車を「支給済み」にしますか？', '支給済みにする', () => {
+    const g = S.games.get(S.gameId); if (!g) return;
+    const args = [];
+    for (const car of calc(g).cars) args.push(FP('paidOut', car.key), true);
+    gUpdate(g.id, ...args);
+  }),
+  'g-band': el => { const b = S.master.bands.find(x => x.id === el.dataset.b); if (b) gUpdate(S.gameId, 'bandId', b.id, 'price', Number(b.price)); },
+  'g-driver': el => toggleArr('drivers', el.dataset.hh),
+  'g-coach': el => toggleArr('coachDrivers', el.dataset.c),
+  'g-absent': el => toggleArr('absent', el.dataset.m),
+  'g-sync-roster': () => gUpdate(S.gameId, 'members', activeMemberIds()),
+  'g-delete': () => ask('この試合の記録を削除します。元に戻せません。', '削除する', () => {
+    const id = S.gameId; S.games.delete(id); track(gref(id).delete()); S.view = 'games'; S.gameId = null; toast('試合を削除しました');
+  }, true),
+  'confirm-cancel': () => { S.confirm = null; render(); },
+  'confirm-ok': () => { const c = S.confirm; S.confirm = null; if (c && c.fn) c.fn(); render(); },
+  'pool-new': () => { S.poolForm = { date: todayISO(), cat: 'out:駐車場代', amount: '', memo: '', err: '' }; render(); },
+  'pool-cancel': () => { S.poolForm = null; render(); },
+  'pool-del': el => {
+    const p = S.pool.get(el.dataset.id); if (!p) return;
+    ask(`「${p.cat} ${yen(Number(p.amount))}」の記録を削除しますか？`, '削除する', () => { track(db.collection('pool').doc(p.id).delete()); toast('削除しました'); }, true);
+  },
+  'am-open': () => { S.addMember = { no: '', name: '', hh: '__new', hhName: '', err: '' }; render(); },
+  'am-cancel': () => { S.addMember = null; render(); },
+  'am-add': () => {
+    const am = S.addMember, d = S.draft; if (!am) return;
+    am.no = document.getElementById('am-no').value; am.name = document.getElementById('am-name').value.trim();
+    const hn = document.getElementById('am-hhname'); if (hn) am.hhName = hn.value.trim();
+    if (!am.name){ am.err = '氏名を入力してください。'; render(); return; }
+    let hh = am.hh;
+    if (hh === '__new'){
+      const name = am.hhName || (am.name.split(/[\s　]/)[0] + '家');
+      hh = rid('h'); d.households.push({ id: hh, name });
+    }
+    d.members.push({ id: rid('m'), no: am.no === '' ? '' : Number(am.no), name: am.name, hh, active: true });
+    S.addMember = null; S.draftDirty = true; render();
+  },
+  'set-add-coach': () => { S.draft.coaches.push({ id: rid('c'), name: '', active: true }); S.draftDirty = true; render(); },
+  'set-add-venue': () => { S.draft.venues.push({ id: rid('v'), name: '', band: (S.draft.bands[0] || {}).id }); S.draftDirty = true; render(); },
+  'set-del-venue': el => { S.draft.venues = S.draft.venues.filter(v => v.id !== el.dataset.id); S.draftDirty = true; render(); },
+  'draft-reset': () => { S.draft = clone(S.master); S.draftDirty = false; S.addMember = null; S.importMsg = ''; render(); },
+  'draft-save': () => saveDraft(),
+  'user-del': el => {
+    const uid = el.dataset.uid, name = el.dataset.name;
+    ask(`ID「${name}」を削除しますか？ この人はすぐに見られなくなります。`, '削除する', () => { track(db.doc('roles/' + uid).delete()); toast(`ID「${name}」を削除しました`); }, true);
+  },
+  'csv': el => exportCsv(el.dataset.k)
+};
+function toggleArr(field, v){
+  const g = S.games.get(S.gameId); if (!g) return;
+  const on = !(g[field] || []).includes(v);
+  gUpdate(g.id, field, on ? FV().arrayUnion(v) : FV().arrayRemove(v));
+}
+const CHANGE = {
+  'ng-venue': el => {
+    if (!S.newGame) return;
+    const dt = document.getElementById('ng-date'); if (dt) S.newGame.date = dt.value;
+    S.newGame.venueId = el.value; render();
+  },
+  'g-date': el => gUpdate(S.gameId, 'date', el.value),
+  'g-venue': el => {
+    if (el.value === '__other'){ gUpdate(S.gameId, 'venueId', null); return; }
+    const v = S.master.venues.find(x => x.id === el.value); if (!v) return;
+    const b = S.master.bands.find(x => x.id === v.band);
+    if (b) gUpdate(S.gameId, 'venueId', v.id, 'venueName', v.name, 'bandId', b.id, 'price', Number(b.price));
+    else gUpdate(S.gameId, 'venueId', v.id, 'venueName', v.name);
+  },
+  'g-vname': el => { const t = el.value.trim(); if (t) gUpdate(S.gameId, 'venueName', t); },
+  'g-memo': el => { const g = S.games.get(S.gameId); if (g && g.memo !== el.value) gUpdate(S.gameId, 'memo', el.value); },
+  'am-hh': el => {
+    const am = S.addMember; if (!am) return;
+    am.no = document.getElementById('am-no').value; am.name = document.getElementById('am-name').value;
+    const hn = document.getElementById('am-hhname'); if (hn) am.hhName = hn.value;
+    am.hh = el.value; render();
+  },
+  'role-change': el => { track(db.doc('roles/' + el.dataset.uid).update({ role: el.value })); toast('権限を変更しました'); }
+};
+function bindDraft(el){
+  const d = S.draft; if (!d) return;
+  const [t, f] = el.dataset.bind.split('.');
+  if (t === 'cfg'){ d[f] = f === 'roundUnit' ? Number(el.value) : el.value; setDirty(); return; }
+  const arr = { m: d.members, hh: d.households, c: d.coaches, v: d.venues, b: d.bands }[t];
+  const o = arr && arr.find(x => x.id === el.dataset.id); if (!o) return;
+  let val = el.type === 'checkbox' ? el.checked : el.value;
+  if (f === 'no' || f === 'price') val = el.value === '' ? '' : Number(el.value);
+  if (o[f] === val) return;
+  o[f] = val; setDirty();
+}
+function saveDraft(){
+  const d = clone(S.draft);
+  d.coaches = d.coaches.filter(x => String(x.name).trim()).map(x => ({ ...x, name: String(x.name).trim() }));
+  d.venues = d.venues.filter(x => String(x.name).trim()).map(x => ({ ...x, name: String(x.name).trim() }));
+  for (const b of d.bands){
+    if (!(Number(b.price) > 0)){ toast('単価は1円以上の数字にしてください'); return; }
+    b.price = Math.round(Number(b.price));
+  }
+  for (const x of d.members){
+    x.name = String(x.name).trim();
+    if (!x.name){ toast('氏名が空の部員がいます'); return; }
+    if (!d.households.some(h => h.id === x.hh)){ toast(`${x.name} の世帯を選んでください`); return; }
+  }
+  const nos = d.members.filter(x => x.active !== false && x.no !== '').map(x => Number(x.no));
+  const dup = nos.find((n, i) => nos.indexOf(n) !== i);
+  if (dup !== undefined){ toast(`背番号 ${dup} が重複しています`); return; }
+  for (const h of d.households) h.name = String(h.name).trim() || '（名前なし）';
+  d.updatedAt = Date.now();
+  S.master = normalizeMaster(d); track(db.doc('master/main').set(S.master));
+  S.draft = clone(S.master); S.draftDirty = false; S.importMsg = ''; toast('設定を保存しました'); render();
+}
+function importRoster(file){
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const j = JSON.parse(String(fr.result).replace(/^﻿/, ''));
+      if (!Array.isArray(j.households) || !Array.isArray(j.members)) throw new Error('形式');
+      const hhIds = new Set(j.households.map(h => h.id));
+      for (const x of j.members) if (!x.id || !x.name || !hhIds.has(x.hh)) throw new Error('形式');
+      S.draft.households = j.households.map(h => ({ id: String(h.id), name: String(h.name) }));
+      S.draft.members = j.members.map(x => ({ id: String(x.id), no: x.no === '' || x.no == null ? '' : Number(x.no), name: String(x.name), hh: String(x.hh), active: x.active !== false }));
+      if (Array.isArray(j.coaches) && j.coaches.length) S.draft.coaches = j.coaches.map(c => ({ id: String(c.id), name: String(c.name), active: c.active !== false }));
+      S.importMsg = `${j.households.length}世帯・${j.members.length}人を読み込みました。内容を確認して「保存する」を押してください。`;
+      S.draftDirty = true; render();
+    } catch (_){ S.importMsg = 'このファイルは名簿として読み込めません。配車費アプリ用の名簿ファイルを選んでください。'; render(); }
+  };
+  fr.readAsText(file, 'utf-8');
+}
+
+/* ---------- CSV ---------- */
+const cell = v => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+function exportCsv(kind){
+  const games = [...S.games.values()].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  let rows, name;
+  if (kind === 'games'){
+    name = 'games';
+    rows = [['日付','行先','単価','集金対象(人)','集金予定額','回収済額','未収額','配車(保護者)','配車(指導者)','1台あたり','支給額合計','支給済(台)','プールへ','メモ']];
+    for (const g of games){ const c = calc(g);
+      rows.push([g.date, g.venueName, g.price, c.chargeCount, c.A, c.collected, c.outstanding, c.nHH, c.nCoach, c.per, c.payTotal, c.paidOutCount, c.toPool, g.memo || '']); }
+  } else if (kind === 'detail'){
+    name = 'detail';
+    rows = [['日付','行先','区分','世帯・車','部員','集金人数','金額','済']];
+    for (const g of games){ const c = calc(g), absent = new Set(g.absent || []);
+      for (const r of c.rows){
+        const kubun = r.present === 0 ? '欠席' : r.isDriver ? (r.due > 0 ? '集金（配車・1人分免除）' : '配車（免除）') : '集金';
+        rows.push([g.date, g.venueName, kubun, r.name, r.members.map(x => x.no + ' ' + x.name + (absent.has(x.id) ? '(欠席)' : '')).join(' / '), r.charge, r.due, r.due > 0 ? (r.paid ? '受領' : '未収') : '']);
+      }
+      for (const car of c.cars) rows.push([g.date, g.venueName, car.kind === 'coach' ? '支給（指導者）' : '支給（保護者）', car.name, '', '', c.per, (g.paidOut || {})[car.key] ? '支給済' : '未支給']);
+    }
+  } else {
+    name = 'pool';
+    const items = [];
+    for (const g of games){ const c = calc(g); if (c.toPool) items.push({ date: g.date, cat: '試合のあまり', memo: g.venueName, amt: c.toPool }); }
+    for (const p of S.pool.values()) items.push({ date: p.date, cat: p.cat, memo: p.memo || '', amt: p.kind === 'in' ? Number(p.amount) : -Number(p.amount) });
+    items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    let bal = 0;
+    rows = [['日付','区分','内容','収入','支出','残高']];
+    for (const it of items){ bal += it.amt; rows.push([it.date, it.cat, it.memo, it.amt > 0 ? it.amt : '', it.amt < 0 ? -it.amt : '', bal]); }
+  }
+  const csv = '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `haisha_${name}_${todayISO()}.csv`;  // 端末によって日本語のファイル名が崩れるため英数字にする
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/* ================= イベント ================= */
+const FORMBIND = {
+  'ng-date': ['newGame','date'], 'ng-vname': ['newGame','vname'], 'ng-band': ['newGame','band'],
+  'pf-date': ['poolForm','date'], 'pf-cat': ['poolForm','cat'], 'pf-amt': ['poolForm','amount'], 'pf-memo': ['poolForm','memo'],
+  'am-no': ['addMember','no'], 'am-name': ['addMember','name'], 'am-hhname': ['addMember','hhName']
+};
+function formBind(el){ const fb = FORMBIND[el.id]; if (!fb) return; const o = S[fb[0]]; if (o) o[fb[1]] = el.value; }
+document.addEventListener('click', e => {
+  const el = e.target.closest('button[data-act]'); if (!el || !$app.contains(el)) return;
+  const f = CLICK[el.dataset.act]; if (!f) return;
+  e.preventDefault(); f(el);
+});
+document.addEventListener('change', e => {
+  const el = e.target; if (!$app.contains(el)) return;
+  if (el.id === 'imp-file' && el.files && el.files[0]){ importRoster(el.files[0]); return; }
+  formBind(el);
+  if (el.dataset.on && CHANGE[el.dataset.on]) CHANGE[el.dataset.on](el);
+  if (el.dataset.bind){ bindDraft(el); if (el.tagName === 'SELECT' && el.dataset.bind === 'm.hh') render(); }
+});
+document.addEventListener('input', e => {
+  const el = e.target; if (!$app.contains(el)) return;
+  formBind(el);
+  if (el.dataset && el.dataset.bind && el.tagName === 'INPUT' && el.type !== 'checkbox') bindDraft(el);
+});
+document.addEventListener('submit', e => {
+  const form = e.target.closest('form[data-form]'); if (!form) return;
+  e.preventDefault();
+  if (S.busy) return;
+  const k = form.dataset.form;
+  if (k === 'login') submitLogin(form);
+  else if (k === 'setup') submitSetup(form);
+  else if (k === 'changepw') submitChangePw(form, false);
+  else if (k === 'pw') submitChangePw(form, true);
+  else if (k === 'adduser') submitAddUser(form);
+  else if (k === 'pool'){
+    const f = S.poolForm; if (!f || !canEdit()) return;
+    f.date = form.querySelector('#pf-date').value; f.cat = form.querySelector('#pf-cat').value;
+    f.amount = form.querySelector('#pf-amt').value; f.memo = form.querySelector('#pf-memo').value.trim();
+    const amt = Math.round(Number(f.amount));
+    if (!(amt > 0)){ f.err = '金額を1円以上の数字で入力してください。'; render(); return; }
+    const [kind, cat] = f.cat.split(':');
+    const id = rid('p');
+    track(db.collection('pool').doc(id).set({ date: f.date || todayISO(), kind, cat, amount: amt, memo: f.memo, createdAt: Date.now(), createdBy: S.user.uid }));
+    S.poolForm = null; toast('記録しました'); render();
+  }
+});
+document.addEventListener('focusout', () => { if (S.renderPending) setTimeout(() => { if (S.renderPending && !isTyping()) render(); }, 60); });
+
+render();
+boot();
+})();
+</script>
+</body>
+</html>
