@@ -93,7 +93,16 @@ p{margin:0}
 .empty{font-size:14px;color:var(--ink-2);background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);padding:18px 16px}
 
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
-.tabs .wrap{display:grid;grid-template-columns:repeat(3,1fr)}
+.tabs .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
+.crow2{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}
+.crow2:first-child{border-top:0}
+.crow2 .nm{font-weight:700;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.crow2 .meta{grid-column:1/2;font-size:12px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 10px}
+.crow2 .cnt{grid-row:1/3;grid-column:2/3;font-family:var(--font-num);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right;line-height:1}
+.crow2 .cnt small{font-family:var(--font-ui);font-size:12px;font-weight:400;margin-left:2px}
+.crow2 .bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.crow2 .bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.crow2.zero .cnt{color:var(--warn)}
 .tabs button{min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;color:var(--ink-2);background:none;border:0;cursor:pointer}
 .tabs button[aria-current="page"]{color:var(--accent);font-weight:700}
 
@@ -324,6 +333,7 @@ function authMsg(e){
 
 const ICON = {
   list:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>',
+  bars:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M5 20V12M12 20V5M19 20v-9" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>',
   coin:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><ellipse cx="12" cy="6.5" rx="7" ry="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M5 6.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5M5 11.5v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" stroke="currentColor" stroke-width="2" fill="none"/></svg>',
   gear:'<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h2M12 17h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="16" cy="7" r="2.5" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="9" cy="17" r="2.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>',
   check:'<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -363,7 +373,7 @@ function calc(g, m){
   const chargeCount = rows.reduce((s, r) => s + r.charge, 0);
   const rowByHh = new Map(rows.map(r => [r.hh, r]));
   const hhCars = (g.drivers || []).filter(id => m.households.some(h => h.id === id))
-    .map(id => ({ key: id, kind: 'hh', name: hhName(id, m), row: rowByHh.get(id) || null }));
+    .map(id => ({ key: id, kind: 'hh', name: hhName(id, m), row: rowByHh.get(id) || null, tool: g.toolCar === id }));
   const coachCars = (g.coachDrivers || []).map(id => ({ key: id, kind: 'coach', name: coachName(id, m), row: null }));
   const cars = [...hhCars, ...coachCars];
   const n = cars.length;
@@ -403,7 +413,7 @@ function defaultMaster(){
     ['有明の森運動公園','b1000'],['鴻ノ巣グラウンド','b1000'],['甲辰園グラウンド','b1000'],['波佐見中学校','b1000'],['大悲観公園野球場','b1000']
   ];
   return {
-    version: 1, season: '令和9年度', roundUnit: 100,
+    version: 1, season: '令和9年', roundUnit: 100,
     bands: [
       { id:'b500', label:'往復50km以内', price:500 },
       { id:'b800', label:'往復79km以内', price:800 },
@@ -646,8 +656,8 @@ function viewChangePw(){
 }
 
 function viewApp(){
-  const nav = [['games','試合',ICON.list],['pool','プール',ICON.coin],['settings', canEdit() ? '設定' : 'アカウント', ICON.gear]];
-  const body = S.view === 'game' ? viewGame() : S.view === 'pool' ? viewPool() : S.view === 'settings' ? viewSettings() : viewGames();
+  const nav = [['games','試合',ICON.list],['counts','回数',ICON.bars],['pool','プール',ICON.coin],['settings', canEdit() ? '設定' : 'アカウント', ICON.gear]];
+  const body = S.view === 'game' ? viewGame() : S.view === 'counts' ? viewCounts() : S.view === 'pool' ? viewPool() : S.view === 'settings' ? viewSettings() : viewGames();
   const s = syncInfo();
   return `<header class="topbar"><div class="wrap">
       ${LOGO('')}
@@ -781,7 +791,7 @@ function tabPayout(g, c){
       ? `<span class="sub">この世帯から兄弟分 ${yen(car.row.due)} を集金。差し引きで渡すなら ${yen(c.per - car.row.due)}</span>` : '';
     return tapRow(done, `data-act="toggle-out" data-key="${esc(car.key)}"`,
       `<span class="check" aria-hidden="true">${done ? ICON.check : ''}</span>
-      <span class="who"><b>${esc(car.name)}<span class="pill">${car.kind === 'coach' ? '指導者' : '保護者'}</span>${!canEdit() ? `<span class="pill ${done ? 'ok' : ''}">${done ? '支給済み' : '未支給'}</span>` : ''}</b>${offset}</span>
+      <span class="who"><b>${esc(car.name)}<span class="pill">${car.kind === 'coach' ? '指導者' : '保護者'}</span>${car.tool ? '<span class="pill accent">道具車</span>' : ''}${!canEdit() ? `<span class="pill ${done ? 'ok' : ''}">${done ? '支給済み' : '未支給'}</span>` : ''}</b>${offset}</span>
       <span class="amt">${num(c.per)}<small>円</small></span>`);
   };
   return `<div class="calc">集金予定 ${yen(c.A)} ÷ ${c.n}台 ＝ ${avg}円 → ${num(c.unit)}円未満を切り捨てて <b>1台 ${yen(c.per)}</b><br>
@@ -798,7 +808,7 @@ function tabSetup(g, c){
   const gameMembers = (g.members || []).map(id => memById.get(id)).filter(Boolean).sort((a, b) => (Number(a.no) || 999) - (Number(b.no) || 999));
   if (!canEdit()){
     const tagList = arr => arr.length ? `<div class="tags">${arr.join('')}</div>` : '<p class="hint">なし</p>';
-    return `<section><h2>配車する保護者<span class="count">${c.nHH}台</span></h2>${tagList(c.cars.filter(x => x.kind === 'hh').map(x => `<span class="tag">${esc(x.name)}</span>`))}</section>
+    return `<section><h2>配車する保護者<span class="count">${c.nHH}台</span></h2>${tagList(c.cars.filter(x => x.kind === 'hh').map(x => `<span class="tag">${esc(x.name)}${x.tool ? '<small>（道具車）</small>' : ''}</span>`))}</section>
       <section><h2>配車する指導者<span class="count">${c.nCoach}台</span></h2>${tagList(c.cars.filter(x => x.kind === 'coach').map(x => `<span class="tag">${esc(x.name)}</span>`))}</section>
       <section><h2>欠席<span class="count">${absent.size}人</span></h2>${tagList(gameMembers.filter(x => absent.has(x.id)).map(x => `<span class="tag"><span class="no">${esc(x.no)}</span>${esc(x.name)}</span>`))}</section>
       ${g.memo ? `<section><h2>メモ</h2><p>${esc(g.memo)}</p></section>` : ''}`;
@@ -818,6 +828,9 @@ function tabSetup(g, c){
     </section>
     <section><h2>配車する保護者<span class="count">${c.nHH}台</span></h2>
       <div class="chips">${c.rows.map(r => `<button type="button" class="chip" data-act="g-driver" data-hh="${esc(r.hh)}" aria-pressed="${drivers.has(r.hh)}">${esc(r.name)}</button>`).join('') || '<p class="hint">名簿に世帯がありません。</p>'}</div></section>
+    <section><h2>道具車</h2>
+      <p class="hint">道具車を出した世帯を選びます（1台）。受け取る金額はほかの車と同じで、「回数」の記録に使います。</p>
+      <div class="chips">${c.cars.filter(x => x.kind === 'hh').map(x => `<button type="button" class="chip" data-act="g-tool" data-hh="${esc(x.key)}" aria-pressed="${x.tool}">${esc(x.name)}</button>`).join('') || '<p class="hint">先に「配車する保護者」を選んでください。</p>'}</div></section>
     <section><h2>配車する指導者<span class="count">${c.nCoach}台</span></h2>
       <div class="chips">${coaches.map(x => `<button type="button" class="chip" data-act="g-coach" data-c="${esc(x.id)}" aria-pressed="${coachDrivers.has(x.id)}">${esc(x.name)}</button>`).join('') || '<p class="hint">設定で指導者を登録してください。</p>'}</div></section>
     <section><h2>欠席する部員<span class="count">${absent.size}人</span></h2>
@@ -826,6 +839,62 @@ function tabSetup(g, c){
     ${rosterDiff ? `<div class="note accent">名簿がこの試合の作成後に変わっています。<div class="btnrow" style="margin-top:8px"><button type="button" class="btn sec small" data-act="g-sync-roster">いまの名簿をこの試合に反映</button></div></div>` : ''}
     <div class="field"><label for="g-memo">メモ</label><textarea id="g-memo" rows="3" data-on="g-memo">${esc(g.memo)}</textarea></div>
     <button type="button" class="btn danger block" data-act="g-delete">この試合を削除</button>`;
+}
+
+/* ---------- 配車回数 ---------- */
+// 世帯ごとの車出し回数。今日までの試合を「回数」、今日より後の試合を「予定」として数える。
+function driveCounts(){
+  const m = S.master, today = todayISO();
+  const memByHh = new Map();
+  for (const x of m.members) {
+    if (!memByHh.has(x.hh)) memByHh.set(x.hh, []);
+    memByHh.get(x.hh).push(x);
+  }
+  const rows = new Map();
+  const ensure = id => {
+    if (!rows.has(id)) {
+      const mem = (memByHh.get(id) || []).filter(x => x.active !== false).sort((a, b) => (Number(a.no) || 999) - (Number(b.no) || 999));
+      rows.set(id, { hh: id, name: hhName(id, m), members: mem, done: 0, tool: 0, planned: 0, last: '' });
+    }
+    return rows.get(id);
+  };
+  for (const h of m.households) if ((memByHh.get(h.id) || []).some(x => x.active !== false)) ensure(h.id);
+  let gamesDone = 0, gamesPlanned = 0;
+  for (const g of S.games.values()) {
+    const past = (g.date || '') <= today;
+    if (past) gamesDone++; else gamesPlanned++;
+    for (const id of g.drivers || []) {
+      if (!m.households.some(h => h.id === id)) continue;
+      const r = ensure(id);
+      if (past) { r.done++; if (g.toolCar === id) r.tool++; if ((g.date || '') > r.last) r.last = g.date; }
+      else r.planned++;
+    }
+  }
+  const list = [...rows.values()].sort((a, b) =>
+    a.done - b.done || (a.last || '').localeCompare(b.last || '') ||
+    (Number((a.members[0] || {}).no) || 999) - (Number((b.members[0] || {}).no) || 999));
+  return { list, gamesDone, gamesPlanned };
+}
+function viewCounts(){
+  const { list, gamesDone, gamesPlanned } = driveCounts();
+  const max = Math.max(1, ...list.map(r => r.done));
+  const md = iso => iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '';
+  const counts = list.map(r => r.done);
+  const lo = counts.length ? Math.min(...counts) : 0, hi = counts.length ? Math.max(...counts) : 0;
+  return `<h1>配車回数</h1>
+    <p class="hint">世帯ごとの車出しの回数です。回数の少ない順に並んでいます（同じ回数なら、最後に車を出した日が古い順）。今日より後の日付の試合は「予定」として数えます。</p>
+    <section class="stats" aria-label="配車回数の集計">
+      <div><span>試合（今日まで）</span><b>${gamesDone}</b></div>
+      <div><span>予定の試合</span><b>${gamesPlanned}</b></div>
+      <div><span>いちばん少ない世帯</span><b>${lo}<small style="font-size:13px">回</small></b></div>
+      <div><span>いちばん多い世帯</span><b>${hi}<small style="font-size:13px">回</small></b></div>
+    </section>
+    ${list.length ? `<div class="ledger">${list.map(r => `<div class="crow2 ${r.done === 0 ? 'zero' : ''}">
+        <span class="nm">${esc(r.name)}${r.tool ? `<span class="pill accent">うち道具車 ${r.tool}回</span>` : ''}${r.planned ? `<span class="pill">予定 ${r.planned}回</span>` : ''}</span>
+        <span class="cnt">${r.done}<small>回</small></span>
+        <span class="meta">${r.members.map(x => `<span class="mem"><span class="no">${esc(x.no)}</span>${esc(x.name)}</span>`).join('')}${r.last ? `<span>最後：${md(r.last)}</span>` : '<span>まだ車出しなし</span>'}</span>
+        <span class="bar"><i style="width:${Math.round(r.done / max * 100)}%"></i></span>
+      </div>`).join('')}</div>` : '<p class="empty">名簿が登録されると、世帯ごとの回数が表示されます。</p>'}`;
 }
 
 /* ---------- プール ---------- */
@@ -1071,7 +1140,16 @@ const CLICK = {
     gUpdate(g.id, ...args);
   }),
   'g-band': el => { const b = S.master.bands.find(x => x.id === el.dataset.b); if (b) gUpdate(S.gameId, 'bandId', b.id, 'price', Number(b.price)); },
-  'g-driver': el => toggleArr('drivers', el.dataset.hh),
+  'g-driver': el => {
+    const g = S.games.get(S.gameId); if (!g) return;
+    const hh = el.dataset.hh, on = !(g.drivers || []).includes(hh);
+    if (!on && g.toolCar === hh) gUpdate(g.id, 'drivers', FV().arrayRemove(hh), 'toolCar', null);
+    else toggleArr('drivers', hh);
+  },
+  'g-tool': el => {
+    const g = S.games.get(S.gameId); if (!g) return;
+    gUpdate(g.id, 'toolCar', g.toolCar === el.dataset.hh ? null : el.dataset.hh);
+  },
   'g-coach': el => toggleArr('coachDrivers', el.dataset.c),
   'g-absent': el => toggleArr('absent', el.dataset.m),
   'g-sync-roster': () => gUpdate(S.gameId, 'members', activeMemberIds()),
@@ -1209,7 +1287,7 @@ function exportCsv(kind){
         const kubun = r.present === 0 ? '欠席' : r.isDriver ? (r.due > 0 ? '集金（配車・1人分免除）' : '配車（免除）') : '集金';
         rows.push([g.date, g.venueName, kubun, r.name, r.members.map(x => x.no + ' ' + x.name + (absent.has(x.id) ? '(欠席)' : '')).join(' / '), r.charge, r.due, r.due > 0 ? (r.paid ? '受領' : '未収') : '']);
       }
-      for (const car of c.cars) rows.push([g.date, g.venueName, car.kind === 'coach' ? '支給（指導者）' : '支給（保護者）', car.name, '', '', c.per, (g.paidOut || {})[car.key] ? '支給済' : '未支給']);
+      for (const car of c.cars) rows.push([g.date, g.venueName, car.kind === 'coach' ? '支給（指導者）' : (car.tool ? '支給（保護者・道具車）' : '支給（保護者）'), car.name, '', '', c.per, (g.paidOut || {})[car.key] ? '支給済' : '未支給']);
     }
   } else {
     name = 'pool';
