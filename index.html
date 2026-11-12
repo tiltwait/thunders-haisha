@@ -590,6 +590,46 @@ async function submitAddUser(form){
     S.busy = false; toast(`ID「${id}」を発行しました`); render();
   } catch (e){ S.busy = false; S.userMsg = authMsg(e); render(); }
 }
+// 一覧を貼り付けて、まとめて発行する（1行に「ID　パスワード」。Excelの2列をそのまま貼り付けられる）
+async function submitBulkUsers(form){
+  const text = form.querySelector('#bu-text').value, role = form.querySelector('#bu-role').value;
+  S.bulkText = text;
+  const items = text.split(/\r?\n/).map((l, i) => {
+    const p = l.trim().split(/[\t,，\s]+/).filter(Boolean);
+    return { line: i + 1, id: normId(p[0] || ''), pw: p[1] || '' };   // line は貼り付けた欄での行番号
+  }).filter(it => it.id && !(it.id === 'id' && /パスワード|password/i.test(it.pw)));   // 空行と見出し行は無視する
+  const errs = [], seen = new Set();
+  items.forEach(it => {
+    if (!/^[a-z0-9._-]{3,20}$/.test(it.id)) errs.push(`${it.line}行目：IDは半角英数字（3〜20文字）にしてください。`);
+    else if (seen.has(it.id)) errs.push(`${it.line}行目：ID「${it.id}」が重複しています。`);
+    else { const p = pwProblem(it.pw); if (p) errs.push(`${it.line}行目（${it.id}）：${p}`); }
+    seen.add(it.id);
+  });
+  if (!items.length) errs.push('一覧が空です。');
+  if (errs.length){ S.bulkResult = { errors: errs }; render(); return; }
+  S.busy = true; S.bulkResult = { total: items.length, done: [], failed: [] }; render();
+  const sec = FB.apps.find(a => a.name === 'creator') || FB.initializeApp(CFG.firebase, 'creator');
+  const sauth = sec.auth();
+  try { await sauth.setPersistence(FB.auth.Auth.Persistence.NONE); } catch (_){}
+  const failedLines = [];
+  for (const it of items){
+    try {
+      const cred = await sauth.createUserWithEmailAndPassword(toEmail(it.id), it.pw);
+      const uid = cred.user.uid;
+      await sauth.signOut();
+      await db.doc('roles/' + uid).set({ role, loginId: it.id, mustChange: true, createdAt: Date.now(), createdBy: S.user.uid });
+      S.bulkResult.done.push(it.id);
+    } catch (e){
+      try { await sauth.signOut(); } catch (_){}
+      S.bulkResult.failed.push(`${it.id}：${authMsg(e)}`);
+      failedLines.push(`${it.id}\t${it.pw}`);
+    }
+    render();
+  }
+  S.busy = false; S.bulkText = failedLines.join('\n');
+  toast(`${S.bulkResult.done.length}件を発行しました` + (S.bulkResult.failed.length ? `（${S.bulkResult.failed.length}件は失敗）` : ''));
+  render();
+}
 
 /* ================= 描画 ================= */
 function isTyping(){
@@ -977,6 +1017,16 @@ function usersCard(){
       </form>
       ${S.userMsg ? `<p class="err" role="alert">${esc(S.userMsg)}</p>` : ''}
       <p class="hint">発行した人は、最初のログインでパスワードを変更します。パスワードを忘れた人には、新しいIDを発行して古いIDを削除してください。</p>
+      <details ${S.bulkText || S.bulkResult ? 'open' : ''}><summary class="lbl" style="cursor:pointer">まとめて発行（一覧を貼り付け）</summary>
+        <form data-form="bulkuser" class="plainform" style="margin-top:10px">
+          <p class="hint">1行に「ID　最初のパスワード」を入れます。Excelの一覧から、IDとパスワードの2列をコピーしてそのまま貼り付けられます。</p>
+          <div class="field"><label for="bu-text">ID と最初のパスワード</label><textarea id="bu-text" rows="8" spellcheck="false" autocapitalize="off" placeholder="例：&#10;oba	k7mq2wx9pa&#10;yano	h3tc8rbe4n">${esc(S.bulkText || '')}</textarea></div>
+          <div class="field"><label for="bu-role">権限（全員共通）</label><select id="bu-role"><option value="viewer">閲覧</option><option value="editor">担当者</option></select></div>
+          <button type="submit" class="btn sec" ${S.busy ? 'disabled' : ''}>${S.busy && S.bulkResult && S.bulkResult.total ? `<span class="spin"></span>発行中… ${S.bulkResult.done.length + S.bulkResult.failed.length}/${S.bulkResult.total}` : 'まとめて発行'}</button>
+        </form>
+        ${S.bulkResult && S.bulkResult.errors ? `<div class="note warn" role="alert">発行していません。次の行を直してください。<ul class="plain">${S.bulkResult.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}
+        ${S.bulkResult && S.bulkResult.total && !S.busy ? `<div class="note ${S.bulkResult.failed.length ? 'warn' : 'accent'}" role="status">${S.bulkResult.done.length}件を発行しました。${S.bulkResult.failed.length ? `<br>発行できなかったID（上の欄に残しています）：<ul class="plain">${S.bulkResult.failed.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div>` : ''}
+      </details>
     </section>`;
 }
 function viewSettings(){
@@ -1079,7 +1129,7 @@ function gUpdate(id, ...args){
 function setDirty(){ S.draftDirty = true; const sb = document.getElementById('savebar'); if (sb) sb.hidden = false; }
 function goView(v){
   const doGo = () => {
-    if (v !== 'settings'){ S.draft = null; S.draftDirty = false; S.addMember = null; S.acctMsg = ''; S.userMsg = ''; S.importMsg = ''; }
+    if (v !== 'settings'){ S.draft = null; S.draftDirty = false; S.addMember = null; S.acctMsg = ''; S.userMsg = ''; S.importMsg = ''; S.bulkText = ''; S.bulkResult = null; }
     S.view = v; S.newGame = null; S.poolForm = null; render(); window.scrollTo(0, 0);
   };
   if (S.view === 'settings' && v !== 'settings' && S.draftDirty) ask('設定に保存していない変更があります。変更を捨てて移動しますか？', '捨てて移動', doGo, true);
@@ -1341,6 +1391,7 @@ document.addEventListener('submit', e => {
   else if (k === 'changepw') submitChangePw(form, false);
   else if (k === 'pw') submitChangePw(form, true);
   else if (k === 'adduser') submitAddUser(form);
+  else if (k === 'bulkuser') submitBulkUsers(form);
   else if (k === 'pool'){
     const f = S.poolForm; if (!f || !canEdit()) return;
     f.date = form.querySelector('#pf-date').value; f.cat = form.querySelector('#pf-cat').value;
