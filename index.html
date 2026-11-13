@@ -653,7 +653,36 @@ function render(){
   }
   h += viewConfirm();
   $app.innerHTML = h;
+  breakSentences($app);
   updateSync();
+}
+// 説明文は1文ごとに改行して、スマホで読みやすくする。
+// 「。」のあとに文が続くときだけ改行し、カッコ（ ）「 」の中では改行しない。
+const BREAK_SEL = '.hint, .note, .empty, .err, .sub, .card > p, .sheet p';
+function breakSentences(root){
+  root.querySelectorAll(BREAK_SEL).forEach(el => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const texts = [];
+    while (walker.nextNode()) texts.push(walker.currentNode);
+    texts.forEach(t => {
+      const s = t.nodeValue, parts = [];
+      let start = 0, depth = 0;
+      for (let i = 0; i < s.length; i++){
+        const ch = s[i];
+        if ('（「『('.includes(ch)) depth++;
+        else if ('）」』)'.includes(ch)) depth = Math.max(0, depth - 1);
+        else if (ch === '。' && depth === 0 && s.slice(i + 1).trim()){ parts.push(s.slice(start, i + 1)); start = i + 1; }
+      }
+      if (!parts.length) return;
+      parts.push(s.slice(start));
+      const frag = document.createDocumentFragment();
+      parts.forEach((p, i) => {
+        if (i) frag.appendChild(document.createElement('br'));
+        frag.appendChild(document.createTextNode(i ? p.replace(/^\s+/, '') : p));
+      });
+      t.replaceWith(frag);
+    });
+  });
 }
 function gate(inner){ return `<div class="gate wrap"><div class="card">${inner}</div></div>`; }
 const LOGO = (cls) => `<img class="logo${cls ? ' ' + cls : ''}" src="favicon.svg" alt="${esc(TEAM)}のマーク" width="${cls ? 64 : 36}" height="${cls ? 64 : 36}">`;
