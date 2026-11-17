@@ -3,7 +3,7 @@ rules_version = '2';
 // サンダース配車費アプリ用の Firestore セキュリティルール
 // - roles/{uid} に役割（admin=管理者 / editor=担当者 / viewer=閲覧）がある人だけが読める
 // - 書き込めるのは管理者と担当者だけ
-// - ID の発行・権限の変更・削除は管理者だけ
+// - ID の発行・権限の変更・削除は管理者だけ（削除したIDの再発行用に logins/{ID} を使う）
 // - 最初の管理者は、初期設定画面から1回だけ作成できる（meta/bootstrap を作った時点で締め切り）
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -41,6 +41,17 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChange'])
             && request.resource.data.mustChange == false);
       allow delete: if isAdmin() && uid != request.auth.uid;
+    }
+
+    // ログインIDと、ログインに使う内部アドレスの対応（削除したIDを発行し直したときに使う）
+    // ログイン前に1件ずつ引けるだけで、一覧は取れない。書けるのは管理者だけ
+    match /logins/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['email'])
+        && request.resource.data.email is string;
+      allow delete: if isAdmin();
     }
 
     // 名簿・行先・単価

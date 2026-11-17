@@ -294,7 +294,14 @@ const yen = n => (n < 0 ? '−' : '') + num(Math.abs(n)) + '円';
 const rid = p => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const normId = s => String(s || '').trim().toLowerCase();
 const toEmail = id => id.includes('@') ? id : id + '@' + LOGIN_DOMAIN;
-const fromEmail = em => String(em || '').endsWith('@' + LOGIN_DOMAIN) ? em.slice(0, -(LOGIN_DOMAIN.length + 1)) : String(em || '');
+// ログインに使う内部アドレス。削除したIDを再発行したときは logins/{ID} に新しいアドレスが記録されている
+async function emailFor(id){
+  if (id.includes('@')) return id;
+  try { const s = await db.doc('logins/' + id).get(); if (s.exists && s.data().email) return s.data().email; } catch (_){}
+  return toEmail(id);
+}
+// 内部アドレスから画面に出すIDに戻す（再発行したIDの「+英数字」の部分は表示しない）
+const fromEmail = em => String(em || '').endsWith('@' + LOGIN_DOMAIN) ? em.slice(0, -(LOGIN_DOMAIN.length + 1)).replace(/\+.*$/, '') : String(em || '');
 const clone = o => JSON.parse(JSON.stringify(o));
 const WD = ['日','月','火','水','木','金','土'];
 function fmtDate(iso){
@@ -324,6 +331,7 @@ function authMsg(e){
   if (/too-many-requests/.test(c)) return '失敗が続いたため、しばらくログインできません。時間をおいてお試しください。';
   if (/network-request-failed/.test(c)) return '通信できませんでした。電波の良い場所でもう一度お試しください。';
   if (/email-already-in-use/.test(c)) return 'このIDはすでに使われています。別のIDにしてください。';
+  if (/haisha\/id-in-use/.test(c)) return 'このIDは使用中です。同じIDで発行し直すときは、先に一覧からそのIDを削除してください。';
   if (/invalid-email/.test(c)) return 'IDに使えない文字が含まれています。';
   if (/weak-password/.test(c)) return 'パスワードが短すぎます。';
   if (/requires-recent-login/.test(c)) return '安全のため、いまのパスワードをもう一度入力してください。';
@@ -518,7 +526,7 @@ async function submitLogin(form){
   if (!id || !pw){ S.loginErr = 'IDとパスワードを入力してください。'; render(); return; }
   S.busy = true; S.loginErr = ''; render();
   try {
-    await auth.signInWithEmailAndPassword(toEmail(id), pw);
+    await auth.signInWithEmailAndPassword(await emailFor(id), pw);
     try { localStorage.setItem(LS_ID, id); } catch (_){}
   } catch (e){ S.loginErr = authMsg(e); }
   S.busy = false; if (S.phase === 'login') render();
@@ -580,15 +588,35 @@ async function submitAddUser(form){
   const p = pwProblem(pw); if (p){ S.userMsg = p; render(); return; }
   S.busy = true; S.userMsg = ''; render();
   try {
-    const sec = FB.apps.find(a => a.name === 'creator') || FB.initializeApp(CFG.firebase, 'creator');
-    const sauth = sec.auth();
-    await sauth.setPersistence(FB.auth.Auth.Persistence.NONE);
-    const cred = await sauth.createUserWithEmailAndPassword(toEmail(id), pw);
-    const uid = cred.user.uid;
-    await sauth.signOut();
-    await db.doc('roles/' + uid).set({ role, loginId: id, mustChange: true, createdAt: Date.now(), createdBy: S.user.uid });
+    await issueUser(await creatorAuth(), id, pw, role);
     S.busy = false; toast(`ID「${id}」を発行しました`); render();
   } catch (e){ S.busy = false; S.userMsg = authMsg(e); render(); }
+}
+// IDの発行用に、管理者のログインとは別の Firebase 接続を使う（発行しても管理者のログインが切れないように）
+async function creatorAuth(){
+  const sec = FB.apps.find(a => a.name === 'creator') || FB.initializeApp(CFG.firebase, 'creator');
+  const sauth = sec.auth();
+  try { await sauth.setPersistence(FB.auth.Auth.Persistence.NONE); } catch (_){}
+  return sauth;
+}
+// IDを1件発行する。
+// 一覧から削除したIDは、Firebase の中に古いアカウントが残っていて同じアドレスを使えないため、
+// ログイン用の内部アドレスを新しく作り、logins/{ID} に「このIDはこのアドレスでログインする」と記録する。
+async function issueUser(sauth, id, pw, role){
+  if ([...S.roles.values()].some(r => r.loginId === id)) throw Object.assign(new Error('in use'), { code: 'haisha/id-in-use' });
+  let email = toEmail(id), cred;
+  try { cred = await sauth.createUserWithEmailAndPassword(email, pw); }
+  catch (e){
+    if (!/email-already-in-use/.test(e.code || '')) throw e;
+    email = `${id}+${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}@${LOGIN_DOMAIN}`;
+    await db.doc('logins/' + id).set({ email });   // 先に記録する（記録できなければアカウントを作らない）
+    cred = await sauth.createUserWithEmailAndPassword(email, pw);
+  }
+  const uid = cred.user.uid;
+  await sauth.signOut();
+  await db.doc('roles/' + uid).set({ role, loginId: id, email, mustChange: true, createdAt: Date.now(), createdBy: S.user.uid });
+  // 初めて使うIDは、以前の記録が残っていても消えるよう、通常のアドレスを記録しておく
+  if (email === toEmail(id)){ try { await db.doc('logins/' + id).set({ email }); } catch (_){} }
 }
 // 一覧を貼り付けて、まとめて発行する（1行に「ID　パスワード」。Excelの2列をそのまま貼り付けられる）
 async function submitBulkUsers(form){
@@ -608,16 +636,11 @@ async function submitBulkUsers(form){
   if (!items.length) errs.push('一覧が空です。');
   if (errs.length){ S.bulkResult = { errors: errs }; render(); return; }
   S.busy = true; S.bulkResult = { total: items.length, done: [], failed: [] }; render();
-  const sec = FB.apps.find(a => a.name === 'creator') || FB.initializeApp(CFG.firebase, 'creator');
-  const sauth = sec.auth();
-  try { await sauth.setPersistence(FB.auth.Auth.Persistence.NONE); } catch (_){}
+  const sauth = await creatorAuth();
   const failedLines = [];
   for (const it of items){
     try {
-      const cred = await sauth.createUserWithEmailAndPassword(toEmail(it.id), it.pw);
-      const uid = cred.user.uid;
-      await sauth.signOut();
-      await db.doc('roles/' + uid).set({ role, loginId: it.id, mustChange: true, createdAt: Date.now(), createdBy: S.user.uid });
+      await issueUser(sauth, it.id, it.pw, role);
       S.bulkResult.done.push(it.id);
     } catch (e){
       try { await sauth.signOut(); } catch (_){}
@@ -1045,7 +1068,7 @@ function usersCard(){
         <button type="submit" class="btn sec" ${S.busy ? 'disabled' : ''}>IDを発行</button>
       </form>
       ${S.userMsg ? `<p class="err" role="alert">${esc(S.userMsg)}</p>` : ''}
-      <p class="hint">発行した人は、最初のログインでパスワードを変更します。パスワードを忘れた人には、新しいIDを発行して古いIDを削除してください。</p>
+      <p class="hint">発行した人は、最初のログインでパスワードを変更します。パスワードを忘れた人のIDは、一覧から削除してから、同じIDで発行し直してください（新しい最初のパスワードを伝えます）。</p>
       <details ${S.bulkText || S.bulkResult ? 'open' : ''}><summary class="lbl" style="cursor:pointer">まとめて発行（一覧を貼り付け）</summary>
         <form data-form="bulkuser" class="plainform" style="margin-top:10px">
           <p class="hint">1行に「ID　最初のパスワード」を入れます。Excelの一覧から、IDとパスワードの2列をコピーしてそのまま貼り付けられます。</p>
@@ -1265,7 +1288,11 @@ const CLICK = {
   'draft-save': () => saveDraft(),
   'user-del': el => {
     const uid = el.dataset.uid, name = el.dataset.name;
-    ask(`ID「${name}」を削除しますか？ この人はすぐに見られなくなります。`, '削除する', () => { track(db.doc('roles/' + uid).delete()); toast(`ID「${name}」を削除しました`); }, true);
+    ask(`ID「${name}」を削除しますか？ この人はすぐに見られなくなります。同じIDは、あとで発行し直せます。`, '削除する', () => {
+      track(db.doc('roles/' + uid).delete());
+      db.doc('logins/' + name).delete().catch(() => {});
+      toast(`ID「${name}」を削除しました`);
+    }, true);
   },
   'csv': el => exportCsv(el.dataset.k)
 };

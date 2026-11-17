@@ -63,4 +63,4 @@
 
 ## ログインIDについて
 
-ログインIDは `ID@haisha.example.com` というメール形式に変換して Firebase に登録しています（メールは送信されません）。ドメインは `config.js` の `loginDomain` で変えられます。パスワードを忘れた人には、新しいIDを発行して古いIDを削除してください。
+ログインIDは `ID@haisha.example.com` というメール形式に変換して Firebase に登録しています（メールは送信されません）。ドメインは `config.js` の `loginDomain` で変えられます。パスワードを忘れた人のIDは、「設定」の一覧から削除してから、同じIDで発行し直してください。削除したIDの古いアカウントは Firebase に残る（アプリからは消せない）ため、再発行のときは内部のアドレスを `ID+英数字@haisha.example.com` の形で作り直し、`logins/{ID}` にその対応を記録します。ログイン画面では、`logins/{ID}` があればそのアドレスで、なければ `ID@haisha.example.com` でログインします。
