@@ -167,6 +167,12 @@ input[type="file"]{padding:8px}
 .meter{grid-column:1/-1;height:6px;background:var(--board-track);border-radius:3px;overflow:hidden}
 .meter i{display:block;height:100%;background:var(--board-hi);border-radius:3px}
 
+.yearbar{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:6px}
+.ybtn{width:44px;height:44px;flex:none;border:0;border-radius:8px;background:var(--surface-2);color:var(--ink);font-size:24px;line-height:1;cursor:pointer}
+.ybtn:disabled{opacity:.3;cursor:default}
+.ylab{display:grid;justify-items:center;text-align:center;gap:1px}
+.ylab b{font-size:17px;display:flex;align-items:center;gap:6px}
+.ylab small{font-size:12px;color:var(--ink-2)}
 .gtitle{display:grid;gap:4px}
 .back{justify-self:start;background:none;border:0;color:var(--accent);padding:4px 0;cursor:pointer;font-size:14px}
 .gmeta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -278,7 +284,7 @@ const S = {
   phase: 'boot', errMsg: '',
   user: null, role: null,
   master: null, games: new Map(), pool: new Map(), roles: new Map(),
-  view: 'games', gameId: null, gameTab: 'collect',
+  view: 'games', gameId: null, gameTab: 'collect', year: null,
   newGame: null, poolForm: null, addMember: null, importMsg: '',
   draft: null, draftDirty: false,
   subs: [], pending: 0, writeErr: null, online: navigator.onLine,
@@ -313,6 +319,19 @@ function todayISO(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+// 年度は 1月1日〜12月31日（チーム・後援会・会計の区切り）。試合とプールは日付の年で年度を決める
+const yearOf = iso => Number(String(iso || '').slice(0, 4)) || null;
+const thisYear = () => Number(todayISO().slice(0, 4));
+const yearLabel = y => y >= 2019 ? `令和${y - 2018}年` : `${y}年`;
+const curYear = () => S.year || thisYear();
+// 切り替えられる年度の範囲：記録のある年と今年、来年まで
+function yearRange(){
+  const ys = [thisYear(), thisYear() + 1];
+  for (const g of S.games.values()){ const y = yearOf(g.date); if (y) ys.push(y); }
+  for (const p of S.pool.values()){ const y = yearOf(p.date); if (y) ys.push(y); }
+  return { min: Math.min(...ys), max: Math.max(...ys) };
+}
+const gamesOfYear = y => [...S.games.values()].filter(g => yearOf(g.date) === y);
 let toastTimer = null;
 function toast(msg){
   $toast.textContent = msg; $toast.hidden = false;
@@ -391,26 +410,33 @@ function calc(g, m){
   const paidOutCount = cars.filter(c => paidOut[c.key]).length;
   const dueRows = rows.filter(r => r.due > 0);
   return { price, unit, rows, dueRows, A, collected, outstanding: A - collected, chargeCount, cars, n,
-    nHH: hhCars.length, nCoach: coachCars.length, per, payTotal, toPool: A - payTotal,
+    nHH: hhCars.length, nCoach: coachCars.length, per, payTotal, toPool: n > 0 ? A - payTotal : 0,  // 車がまだ決まっていない試合はプールに入れない
     paidOutCount, paidOutAmount: per * paidOutCount, paidCount: dueRows.filter(r => r.paid).length };
 }
-function seasonStats(){
+function seasonStats(y){
   const st = { A:0, collected:0, outstanding:0, payTotal:0, paidOutAmount:0, toPool:0 };
-  for (const g of S.games.values()){
+  for (const g of gamesOfYear(y)){
     const c = calc(g);
-    st.A += c.A; st.collected += c.collected; st.outstanding += c.outstanding;
+    st.A += c.A; st.collected += c.collected; st.outstanding += c.n > 0 ? c.outstanding : 0;  // 車が決まっていない試合は未収に数えない
     st.payTotal += c.payTotal; st.paidOutAmount += c.paidOutAmount; st.toPool += c.toPool;
   }
   return st;
 }
-function poolBalance(){
-  let fromGames = 0, income = 0, expense = 0;
-  for (const g of S.games.values()) fromGames += calc(g).toPool;
-  for (const p of S.pool.values()){
-    const a = Number(p.amount) || 0;
-    if (p.kind === 'in') income += a; else expense += a;
+// 年度 y のプール。前の年度までの残高は「前年からの繰越」として自動で引き継ぐ
+function poolBalance(y){
+  let carry = 0, fromGames = 0, income = 0, expense = 0;
+  for (const g of S.games.values()){
+    const gy = yearOf(g.date); if (!gy || gy > y) continue;
+    const t = calc(g).toPool;
+    if (gy < y) carry += t; else fromGames += t;
   }
-  return { fromGames, income, expense, balance: income + fromGames - expense };
+  for (const p of S.pool.values()){
+    const py = yearOf(p.date); if (!py || py > y) continue;
+    const a = Number(p.amount) || 0;
+    if (py < y) carry += p.kind === 'in' ? a : -a;
+    else if (p.kind === 'in') income += a; else expense += a;
+  }
+  return { carry, fromGames, income, expense, balance: carry + income + fromGames - expense };
 }
 
 /* ================= 名簿の既定値（個人情報を含まない部分） ================= */
@@ -753,7 +779,7 @@ function viewApp(){
   const s = syncInfo();
   return `<header class="topbar"><div class="wrap">
       ${LOGO('')}
-      <div class="brand"><b>${esc(TEAM)} 配車費</b><small>${esc(S.master.season)}・${esc(fromEmail(S.user.email))}（${ROLE_LABEL[S.role.role] || ''}）</small></div>
+      <div class="brand"><b>${esc(TEAM)} 配車費</b><small>${esc(yearLabel(curYear()))}・${esc(fromEmail(S.user.email))}（${ROLE_LABEL[S.role.role] || ''}）</small></div>
       <span id="sync" class="${s.cls}">${s.text}</span>
     </div></header>
     <main class="wrap">${body}</main>
@@ -762,6 +788,16 @@ function viewApp(){
       <button type="button" class="btn small" data-act="draft-save">保存する</button></div></div>` : ''}
     <nav class="tabs" aria-label="メニュー"><div class="wrap">${nav.map(([k, l, i]) =>
       `<button type="button" data-act="nav" data-v="${k}" ${(S.view === k || (k === 'games' && S.view === 'game')) ? 'aria-current="page"' : ''}>${i}<span>${l}</span></button>`).join('')}</div></nav>`;
+}
+
+/* ---------- 年度の切り替え ---------- */
+function yearBar(){
+  const y = curYear(), { min, max } = yearRange();
+  return `<div class="yearbar" role="group" aria-label="年度の切り替え">
+      <button type="button" class="ybtn" data-act="year" data-d="-1" ${y <= min ? 'disabled' : ''} aria-label="前の年度">‹</button>
+      <div class="ylab"><b>${esc(yearLabel(y))}${y === thisYear() ? '<span class="pill accent">今年</span>' : ''}</b><small>${y}年1月1日〜12月31日</small></div>
+      <button type="button" class="ybtn" data-act="year" data-d="1" ${y >= max ? 'disabled' : ''} aria-label="次の年度">›</button>
+    </div>`;
 }
 
 /* ---------- 試合一覧 ---------- */
@@ -780,8 +816,9 @@ function bandOptions(selected){
   return S.master.bands.map(b => `<option value="${b.id}" ${b.id === selected ? 'selected' : ''}>${b.price}円（${esc(b.label)}）</option>`).join('');
 }
 function viewGames(){
-  const games = [...S.games.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
-  const st = seasonStats(), pb = poolBalance();
+  const y = curYear();
+  const games = gamesOfYear(y).sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+  const st = seasonStats(y), pb = poolBalance(y);
   const ng = S.newGame;
   let form = '';
   if (canEdit()) form = ng ? `<section class="card" aria-label="試合を追加">
@@ -797,7 +834,7 @@ function viewGames(){
       <div class="btnrow"><button type="button" class="btn sec" data-act="ng-cancel">やめる</button><button type="button" class="btn" data-act="ng-create">作成する</button></div>
     </section>` : `<button type="button" class="btn block" data-act="new-game">${ICON.plus}試合を追加</button>`;
   const noRoster = !S.master.members.length ? `<p class="note warn">名簿がまだ登録されていません。${canEdit() ? '「設定」の「名簿ファイルの読み込み」から登録してください。' : ''}</p>` : '';
-  return `${noRoster}<section class="stats" aria-label="今年度の集計">
+  return `${noRoster}${yearBar()}<section class="stats" aria-label="${esc(yearLabel(y))}の集計">
       <div><span>試合</span><b>${games.length}</b></div>
       <div><span>回収済み</span><b>${yen(st.collected)}</b></div>
       <div><span>未収</span><b class="${st.outstanding > 0 ? 'warn' : ''}">${yen(st.outstanding)}</b></div>
@@ -805,7 +842,7 @@ function viewGames(){
     </section>
     ${form}
     <section class="list" aria-label="試合の一覧">${games.length ? games.map(gameCard).join('') :
-      `<p class="empty">まだ試合がありません。${canEdit() ? '「試合を追加」で日付と行先を選ぶと、その日の集金リストができます。' : ''}</p>`}</section>`;
+      `<p class="empty">${esc(yearLabel(y))}の試合はまだありません。${canEdit() ? '「試合を追加」で日付と行先を選ぶと、その日の集金リストができます。' : ''}</p>`}</section>`;
 }
 function gameStatus(c){
   if (c.n === 0) return ['', '配車未登録'];
@@ -935,7 +972,7 @@ function tabSetup(g, c){
 
 /* ---------- 配車回数 ---------- */
 // 世帯ごとの車出し回数。今日までの試合を「回数」、今日より後の試合を「予定」として数える。
-function driveCounts(){
+function driveCounts(y){
   const m = S.master, today = todayISO();
   const memByHh = new Map();
   for (const x of m.members) {
@@ -952,7 +989,7 @@ function driveCounts(){
   };
   for (const h of m.households) if ((memByHh.get(h.id) || []).some(x => x.active !== false)) ensure(h.id);
   let gamesDone = 0, gamesPlanned = 0;
-  for (const g of S.games.values()) {
+  for (const g of gamesOfYear(y)) {
     const past = (g.date || '') <= today;
     if (past) gamesDone++; else gamesPlanned++;
     for (const id of g.drivers || []) {
@@ -968,13 +1005,14 @@ function driveCounts(){
   return { list, gamesDone, gamesPlanned };
 }
 function viewCounts(){
-  const { list, gamesDone, gamesPlanned } = driveCounts();
+  const y = curYear();
+  const { list, gamesDone, gamesPlanned } = driveCounts(y);
   const max = Math.max(1, ...list.map(r => r.done));
   const md = iso => iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : '';
   const counts = list.map(r => r.done);
   const lo = counts.length ? Math.min(...counts) : 0, hi = counts.length ? Math.max(...counts) : 0;
-  return `<h1>配車回数</h1>
-    <p class="hint">世帯ごとの車出しの回数です。回数の少ない順に並んでいます（同じ回数なら、最後に車を出した日が古い順）。今日より後の日付の試合は「予定」として数えます。</p>
+  return `${yearBar()}<h1>配車回数</h1>
+    <p class="hint">${esc(yearLabel(y))}の世帯ごとの車出しの回数です。回数は年度ごとに数え直します。回数の少ない順に並んでいます（同じ回数なら、最後に車を出した日が古い順）。今日より後の日付の試合は「予定」として数えます。</p>
     <section class="stats" aria-label="配車回数の集計">
       <div><span>試合（今日まで）</span><b>${gamesDone}</b></div>
       <div><span>予定の試合</span><b>${gamesPlanned}</b></div>
@@ -992,14 +1030,17 @@ function viewCounts(){
 /* ---------- プール ---------- */
 const POOL_CATS = { out: ['駐車場代','指導者の昼食代補助','その他の支出'], in: ['前年度からの繰越','その他の収入'] };
 function viewPool(){
-  const pb = poolBalance();
+  const y = curYear(), pb = poolBalance(y);
   const items = [];
-  for (const g of S.games.values()){
+  for (const g of gamesOfYear(y)){
     const c = calc(g);
     if (c.toPool !== 0) items.push({ date: g.date, kind: 'game', title: '試合のあまり', sub: g.venueName, amount: c.toPool, gid: g.id, t: g.createdAt || 0 });
   }
-  for (const p of S.pool.values()) items.push({ date: p.date, kind: p.kind, title: p.cat, sub: p.memo, amount: p.kind === 'in' ? Number(p.amount) : -Number(p.amount), pid: p.id, t: p.createdAt || 0 });
+  for (const p of S.pool.values()) if (yearOf(p.date) === y) items.push({ date: p.date, kind: p.kind, title: p.cat, sub: p.memo, amount: p.kind === 'in' ? Number(p.amount) : -Number(p.amount), pid: p.id, t: p.createdAt || 0 });
   items.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.t - a.t);
+  if (pb.carry !== 0) items.push({ date: `${y}-01-01`, kind: 'carry', title: '前年からの繰越', sub: `${yearLabel(y - 1)}までの残高（自動）`, amount: pb.carry });
+  // 前年からの繰越が自動で入る年度は、手入力の「前年度からの繰越」を選べないようにする（二重に数えないため）
+  const inCats = POOL_CATS.in.filter(x => !(x === '前年度からの繰越' && pb.carry !== 0));
   const f = S.poolForm;
   let form = '';
   if (canEdit()) form = f ? `<form data-form="pool" class="card" aria-label="支出・収入を記録">
@@ -1008,27 +1049,30 @@ function viewPool(){
         <div class="field"><label for="pf-date">日付</label><input type="date" id="pf-date" value="${esc(f.date)}"></div>
         <div class="field"><label for="pf-cat">区分</label><select id="pf-cat">
           <optgroup label="支出">${POOL_CATS.out.map(x => `<option value="out:${x}" ${f.cat === 'out:' + x ? 'selected' : ''}>${x}</option>`).join('')}</optgroup>
-          <optgroup label="収入">${POOL_CATS.in.map(x => `<option value="in:${x}" ${f.cat === 'in:' + x ? 'selected' : ''}>${x}</option>`).join('')}</optgroup></select></div>
+          <optgroup label="収入">${inCats.map(x => `<option value="in:${x}" ${f.cat === 'in:' + x ? 'selected' : ''}>${x}</option>`).join('')}</optgroup></select></div>
         <div class="field"><label for="pf-amt">金額（円）</label><input id="pf-amt" type="number" inputmode="numeric" min="1" step="1" value="${esc(f.amount)}"></div>
         <div class="field"><label for="pf-memo">内容メモ</label><input id="pf-memo" value="${esc(f.memo)}"></div>
       </div>
       ${f.err ? `<p class="err">${esc(f.err)}</p>` : ''}
       <div class="btnrow"><button type="button" class="btn sec" data-act="pool-cancel">やめる</button><button type="submit" class="btn">記録する</button></div>
     </form>` : `<button type="button" class="btn block" data-act="pool-new">${ICON.plus}支出・収入を記録</button>`;
-  return `<section class="board" aria-label="プール残高">
-      <div class="wide hi"><div class="k">プール残高</div><div class="v big">${pb.balance < 0 ? '−' : ''}${num(Math.abs(pb.balance))}<small>円</small></div></div>
+  const sgn = n => (n < 0 ? '−' : '') + num(Math.abs(n));
+  return `${yearBar()}<section class="board" aria-label="${esc(yearLabel(y))}のプール残高">
+      <div class="wide hi"><div class="k">プール残高（${y}年12月31日まで）</div><div class="v big">${sgn(pb.balance)}<small>円</small></div></div>
+      <div><div class="k">前年からの繰越</div><div class="v">${sgn(pb.carry)}<small>円</small></div></div>
       <div><div class="k">試合のあまり</div><div class="v">${num(pb.fromGames)}<small>円</small></div></div>
-      <div><div class="k">繰越・収入</div><div class="v">${num(pb.income)}<small>円</small></div></div>
+      <div><div class="k">収入</div><div class="v">${num(pb.income)}<small>円</small></div></div>
       <div><div class="k">支出</div><div class="v">${num(pb.expense)}<small>円</small></div></div>
     </section>
-    <p class="hint">プールは駐車場代や指導者の昼食代補助に使います。試合のあまりは自動で入ります。</p>
+    <p class="hint">プールは駐車場代や指導者の昼食代補助に使います。試合のあまりは自動で入ります。年度（1月1日〜12月31日）ごとに区切り、前年の残高は次の年度に自動で繰り越します。${pb.carry === 0 ? 'アプリを使い始めた年度は、それまでの残高を「前年度からの繰越」で記録してください。' : ''}</p>
     ${form}
     ${items.length ? `<div class="ledger">${items.map(it => {
       const a = `<span class="a ${it.amount >= 0 ? 'plus' : 'minus'}">${it.amount >= 0 ? '+' : '−'}${num(Math.abs(it.amount))}</span>`;
       const d = `<span class="d">${it.date ? Number(it.date.slice(5, 7)) + '/' + Number(it.date.slice(8, 10)) : ''}</span>`;
+      if (it.kind === 'carry') return `<div class="lrow">${d}<span class="t"><b>${esc(it.title)}</b><span>${esc(it.sub)}</span></span>${a}<span class="sp"></span></div>`;
       if (it.kind === 'game') return `<div class="lrow">${d}<button type="button" class="linkbtn t" data-act="open-game" data-id="${esc(it.gid)}"><b>${esc(it.title)}</b><span>${esc(it.sub)}</span></button>${a}<span class="sp"></span></div>`;
       return `<div class="lrow">${d}<span class="t"><b>${esc(it.title)}</b><span>${esc(it.sub || '')}</span></span>${a}${canEdit() ? `<button type="button" class="x" data-act="pool-del" data-id="${esc(it.pid)}" aria-label="この記録を削除">×</button>` : '<span class="sp"></span>'}</div>`;
-    }).join('')}</div>` : '<p class="empty">まだ記録がありません。</p>'}`;
+    }).join('')}</div>` : `<p class="empty">${esc(yearLabel(y))}の記録はまだありません。</p>`}`;
 }
 
 /* ---------- 設定 ---------- */
@@ -1136,7 +1180,6 @@ function viewSettings(){
       <div class="field"><label for="cfg-round">1台あたりの端数</label><select id="cfg-round" data-bind="cfg.roundUnit">
         <option value="100" ${Number(d.roundUnit) === 100 ? 'selected' : ''}>100円未満を切り捨て</option>
         <option value="10" ${Number(d.roundUnit) === 10 ? 'selected' : ''}>10円未満を切り捨て</option></select></div>
-      <div class="field"><label for="cfg-season">年度の表示</label><input id="cfg-season" data-bind="cfg.season" value="${esc(d.season)}"></div>
       <p class="hint">単価と端数の変更は、これから作る試合に使われます。作成済みの試合は作成時の単価のままです。</p>
     </section>
     <section class="card">
@@ -1149,7 +1192,8 @@ function viewSettings(){
     ${isAdmin() ? usersCard() : ''}
     <section class="card">
       <h3>書き出し（CSV）</h3>
-      <p class="hint">会計報告用に、Excelで開けるCSVファイルを保存します。</p>
+      <p class="hint">会計報告用に、選んだ年度（1月1日〜12月31日）の記録を、Excelで開けるCSVファイルに保存します。</p>
+      <div class="field"><label for="csv-year">年度</label><select id="csv-year">${(() => { const r = yearRange(), o = []; for (let k = r.max; k >= r.min; k--) o.push(`<option value="${k}" ${k === curYear() ? 'selected' : ''}>${esc(yearLabel(k))}（${k}年）</option>`); return o.join(''); })()}</select></div>
       <div class="btnrow">
         <button type="button" class="btn sec small" data-act="csv" data-k="games">試合別の集計</button>
         <button type="button" class="btn sec small" data-act="csv" data-k="detail">世帯別の明細</button>
@@ -1190,11 +1234,15 @@ function goView(v){
 
 const CLICK = {
   'nav': el => goView(el.dataset.v),
+  'year': el => {
+    const r = yearRange(), y = Math.min(r.max, Math.max(r.min, curYear() + Number(el.dataset.d)));
+    S.year = y; S.newGame = null; S.poolForm = null; render();
+  },
   'reload': () => location.reload(),
   'logout': () => ask('ログアウトしますか？ この端末に一時保存された名簿と記録も消去します。', 'ログアウト', logout),
   'new-game': () => {
     const v = S.master.venues[0];
-    S.newGame = { date: todayISO(), venueId: v ? v.id : '__other', vname: '', band: (S.master.bands[0] || {}).id };
+    S.newGame = { date: curYear() === thisYear() ? todayISO() : `${curYear()}-01-01`, venueId: v ? v.id : '__other', vname: '', band: (S.master.bands[0] || {}).id };
     render();
   },
   'ng-cancel': () => { S.newGame = null; render(); },
@@ -1221,6 +1269,7 @@ const CLICK = {
       paid: {}, paidOut: {}, memo: '', createdAt: Date.now(), updatedAt: Date.now(), createdBy: S.user.uid };
     S.games.set(id, { ...g, id });
     track(gref(id).set(g));
+    S.year = yearOf(g.date) || curYear();
     S.newGame = null; S.view = 'game'; S.gameId = id; S.gameTab = 'setup'; render(); window.scrollTo(0, 0);
   },
   'open-game': el => { S.view = 'game'; S.gameId = el.dataset.id; S.gameTab = 'collect'; render(); window.scrollTo(0, 0); },
@@ -1260,7 +1309,7 @@ const CLICK = {
   }, true),
   'confirm-cancel': () => { S.confirm = null; render(); },
   'confirm-ok': () => { const c = S.confirm; S.confirm = null; if (c && c.fn) c.fn(); render(); },
-  'pool-new': () => { S.poolForm = { date: todayISO(), cat: 'out:駐車場代', amount: '', memo: '', err: '' }; render(); },
+  'pool-new': () => { S.poolForm = { date: curYear() === thisYear() ? todayISO() : `${curYear()}-01-01`, cat: 'out:駐車場代', amount: '', memo: '', err: '' }; render(); },
   'pool-cancel': () => { S.poolForm = null; render(); },
   'pool-del': el => {
     const p = S.pool.get(el.dataset.id); if (!p) return;
@@ -1307,7 +1356,7 @@ const CHANGE = {
     const dt = document.getElementById('ng-date'); if (dt) S.newGame.date = dt.value;
     S.newGame.venueId = el.value; render();
   },
-  'g-date': el => gUpdate(S.gameId, 'date', el.value),
+  'g-date': el => { gUpdate(S.gameId, 'date', el.value); if (yearOf(el.value)) S.year = yearOf(el.value); },
   'g-venue': el => {
     if (el.value === '__other'){ gUpdate(S.gameId, 'venueId', null); return; }
     const v = S.master.venues.find(x => x.id === el.value); if (!v) return;
@@ -1378,7 +1427,9 @@ function importRoster(file){
 /* ---------- CSV ---------- */
 const cell = v => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 function exportCsv(kind){
-  const games = [...S.games.values()].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const sel = document.getElementById('csv-year');
+  const y = Number(sel && sel.value) || curYear();
+  const games = gamesOfYear(y).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   let rows, name;
   if (kind === 'games'){
     name = 'games';
@@ -1399,16 +1450,18 @@ function exportCsv(kind){
     name = 'pool';
     const items = [];
     for (const g of games){ const c = calc(g); if (c.toPool) items.push({ date: g.date, cat: '試合のあまり', memo: g.venueName, amt: c.toPool }); }
-    for (const p of S.pool.values()) items.push({ date: p.date, cat: p.cat, memo: p.memo || '', amt: p.kind === 'in' ? Number(p.amount) : -Number(p.amount) });
+    for (const p of S.pool.values()) if (yearOf(p.date) === y) items.push({ date: p.date, cat: p.cat, memo: p.memo || '', amt: p.kind === 'in' ? Number(p.amount) : -Number(p.amount) });
     items.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-    let bal = 0;
-    rows = [['日付','区分','内容','収入','支出','残高']];
+    const carry = poolBalance(y).carry;
+    let bal = carry;
+    rows = [['日付','区分','内容','収入','支出','残高'], [`${y}-01-01`, '前年からの繰越', `${yearLabel(y - 1)}までの残高`, '', '', carry]];
     for (const it of items){ bal += it.amt; rows.push([it.date, it.cat, it.memo, it.amt > 0 ? it.amt : '', it.amt < 0 ? -it.amt : '', bal]); }
   }
   const csv = '﻿' + rows.map(r => r.map(cell).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
-  a.href = url; a.download = `haisha_${name}_${todayISO()}.csv`;  // 端末によって日本語のファイル名が崩れるため英数字にする
+  // 端末によって日本語のファイル名が崩れるため英数字にする（R9 は令和9年）
+  a.href = url; a.download = `haisha_${y >= 2019 ? 'R' + (y - 2018) : y}_${name}_${todayISO()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
@@ -1457,7 +1510,9 @@ document.addEventListener('submit', e => {
     const [kind, cat] = f.cat.split(':');
     const id = rid('p');
     track(db.collection('pool').doc(id).set({ date: f.date || todayISO(), kind, cat, amount: amt, memo: f.memo, createdAt: Date.now(), createdBy: S.user.uid }));
-    S.poolForm = null; toast('記録しました'); render();
+    const py = yearOf(f.date || todayISO());
+    if (py && py !== curYear()){ S.year = py; toast(`${yearLabel(py)}のプールに記録しました`); } else toast('記録しました');
+    S.poolForm = null; render();
   }
 });
 document.addEventListener('focusout', () => { if (S.renderPending) setTimeout(() => { if (S.renderPending && !isTyping()) render(); }, 60); });
