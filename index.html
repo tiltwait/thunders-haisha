@@ -173,6 +173,7 @@ input[type="file"]{padding:8px}
 .ylab{display:grid;justify-items:center;text-align:center;gap:1px}
 .ylab b{font-size:17px;display:flex;align-items:center;gap:6px}
 .ylab small{font-size:12px;color:var(--ink-2)}
+.uid .seen{display:block;font-size:12px;color:var(--ink-2);font-weight:400}
 .gtitle{display:grid;gap:4px}
 .back{justify-self:start;background:none;border:0;color:var(--accent);padding:4px 0;cursor:pointer;font-size:14px}
 .gmeta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -510,6 +511,7 @@ async function onAuth(user){
   catch (e){ S.phase = 'error'; S.errMsg = '権限を確認できませんでした。電波の良い場所でページを開き直してください。'; render(); return; }
   if (!r.exists){ S.phase = 'norole'; render(); return; }
   S.role = r.data();
+  touchSeen();
   if (S.role.mustChange){ S.phase = 'changepw'; S.loginErr = ''; render(); return; }
   startApp();
 }
@@ -543,6 +545,30 @@ function startApp(){
   S.subs.push(coll('pool', S.pool));
   if (isAdmin()) S.subs.push(coll('roles', S.roles));
   render();
+}
+// 最終利用日時：アプリを開いたとき（10分以上あけて）に、自分の roles に日時を記録する。管理者がID一覧で確認する
+const SEEN_GAP = 10 * 60 * 1000;
+function touchSeen(){
+  if (!S.user || !S.role || document.visibilityState === 'hidden') return;
+  const k = 'haisha.seen.' + S.user.uid;
+  let last = 0;
+  try { last = Number(localStorage.getItem(k)) || 0; } catch (_){}
+  if (Date.now() - last < SEEN_GAP) return;
+  try { localStorage.setItem(k, String(Date.now())); } catch (_){}
+  db.doc('roles/' + S.user.uid).update({ lastSeenAt: FB.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') touchSeen(); });
+const seenMs = v => !v ? 0 : typeof v.toMillis === 'function' ? v.toMillis() : Number(v) || 0;
+function fmtSeen(ms){
+  if (!ms) return '';
+  const d = new Date(ms), now = new Date();
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(now) - day(d)) / 86400000);
+  if (diff === 0) return `今日 ${hm}`;
+  if (diff === 1) return `昨日 ${hm}`;
+  const md = `${d.getMonth() + 1}/${d.getDate()}（${WD[d.getDay()]}）`;
+  return (d.getFullYear() === now.getFullYear() ? md : `${d.getFullYear()}/${md}`) + ` ${hm}`;
 }
 function unsubAll(){ for (const u of S.subs){ try { u(); } catch (_){} } S.subs = []; }
 
@@ -1089,6 +1115,7 @@ function accountCard(){
       </form>
       ${S.acctMsg ? `<p class="err" role="alert">${esc(S.acctMsg)}</p>` : ''}
       <button type="button" class="btn danger" data-act="logout">ログアウト（この端末の記録も消去）</button>
+      <p class="hint">アプリを開いた日時（最終利用）は、IDの管理のために管理者が確認できます。</p>
     </section>`;
 }
 function usersCard(){
@@ -1096,11 +1123,14 @@ function usersCard(){
     const order = { admin: 0, editor: 1, viewer: 2 };
     return (order[a.role] ?? 3) - (order[b.role] ?? 3) || String(a.loginId).localeCompare(String(b.loginId));
   });
+  const others = list.filter(u => u.uid !== S.user.uid);
+  const recent = others.filter(u => Date.now() - seenMs(u.lastSeenAt) < 7 * 86400000).length;
   return `<section class="card">
       <h3>IDの発行と権限</h3>
       <p class="hint">閲覧は見るだけ、担当者は試合・集金・支給・プールを編集できます。IDを削除すると、その人はすぐに見られなくなります。</p>
+      <p class="note">この7日間にアプリを開いたID：<b>${recent}</b> / ${others.length}（あなたを除く）</p>
       <div>${list.map(u => `<div class="urow">
-          <span class="uid">${esc(u.loginId)}${u.uid === S.user.uid ? '（あなた）' : ''}${u.mustChange ? ' <span class="pill warn">初回変更待ち</span>' : ''}</span>
+          <span class="uid">${esc(u.loginId)}${u.uid === S.user.uid ? '（あなた）' : ''}${u.mustChange ? ' <span class="pill warn">初回変更待ち</span>' : ''}<small class="seen">最終利用：${seenMs(u.lastSeenAt) ? esc(fmtSeen(seenMs(u.lastSeenAt))) : '記録なし'}</small></span>
           ${u.uid === S.user.uid ? `<span class="pill accent">${ROLE_LABEL[u.role]}</span>` :
             `<select data-on="role-change" data-uid="${esc(u.uid)}" aria-label="${esc(u.loginId)}の権限">${['viewer','editor','admin'].map(k => `<option value="${k}" ${u.role === k ? 'selected' : ''}>${ROLE_LABEL[k]}</option>`).join('')}</select>`}
           ${u.uid === S.user.uid ? '<span></span>' : `<button type="button" class="x" data-act="user-del" data-uid="${esc(u.uid)}" data-name="${esc(u.loginId)}" aria-label="${esc(u.loginId)}を削除">×</button>`}
@@ -1112,7 +1142,7 @@ function usersCard(){
         <button type="submit" class="btn sec" ${S.busy ? 'disabled' : ''}>IDを発行</button>
       </form>
       ${S.userMsg ? `<p class="err" role="alert">${esc(S.userMsg)}</p>` : ''}
-      <p class="hint">発行した人は、最初のログインでパスワードを変更します。パスワードを忘れた人のIDは、一覧から削除してから、同じIDで発行し直してください（新しい最初のパスワードを伝えます）。</p>
+      <p class="hint">発行した人は、最初のログインでパスワードを変更します。パスワードを忘れた人のIDは、一覧から削除してから、同じIDで発行し直してください（新しい最初のパスワードを伝えます）。最終利用は、そのIDでアプリを開いた最後の日時です（2026年11月20日から記録）。</p>
       <details ${S.bulkText || S.bulkResult ? 'open' : ''}><summary class="lbl" style="cursor:pointer">まとめて発行（一覧を貼り付け）</summary>
         <form data-form="bulkuser" class="plainform" style="margin-top:10px">
           <p class="hint">1行に「ID　最初のパスワード」を入れます。Excelの一覧から、IDとパスワードの2列をコピーしてそのまま貼り付けられます。</p>

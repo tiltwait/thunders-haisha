@@ -39,7 +39,11 @@ service cloud.firestore {
       allow update: if (isAdmin() && uid != request.auth.uid && validRole(request.resource.data.role))
         || (signedIn() && uid == request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['mustChange'])
-            && request.resource.data.mustChange == false);
+            && request.resource.data.mustChange == false)
+        // 本人は「最終利用日時」だけを、サーバーの時刻で書ける
+        || (signedIn() && uid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt'])
+            && request.resource.data.lastSeenAt == request.time);
       allow delete: if isAdmin() && uid != request.auth.uid;
     }
 
